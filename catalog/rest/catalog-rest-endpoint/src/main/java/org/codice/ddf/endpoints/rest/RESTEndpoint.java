@@ -223,6 +223,8 @@ public class RESTEndpoint implements RESTService {
             .build();
       }
 
+      //  This stream will be closed by the client and all catches are thrown before
+      //  the stream gets initialized.
       LOGGER.debug("Read and transform complete, preparing response.");
       responseBuilder = Response.ok(content.getInputStream(), content.getMimeTypeValue());
 
