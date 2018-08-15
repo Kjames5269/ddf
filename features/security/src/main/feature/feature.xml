@@ -74,6 +74,7 @@
     <feature name="platform-error-page-injector" version="${project.version}"
              description="Adding a better error page to Jetty">
         <feature>platform-error-servlet</feature>
+
         <bundle>mvn:ddf.platform.error/platform-error-page-injector/${project.version}</bundle>
     </feature>
 
