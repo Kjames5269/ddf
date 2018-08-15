@@ -28,6 +28,7 @@ import javax.servlet.ServletContext
 import javax.servlet.Servlet
 import javax.servlet.SessionCookieConfig
 import java.lang.reflect.Field
+import java.util.concurrent.ScheduledExecutorService
 
 class ErrorPageInjectorSpec extends Specification {
 
@@ -37,6 +38,7 @@ class ErrorPageInjectorSpec extends Specification {
     def bundleContext
     def servletContext
     def service
+    def executorService
 
     def setup() {
 
@@ -46,6 +48,7 @@ class ErrorPageInjectorSpec extends Specification {
         bundleContext    = Mock(BundleContext.class)
         servletContext   = Mock(ServletContext.class)
         service          = Mock(Servlet.class)
+        executorService  = Mock(ScheduledExecutorService.class)
 
         bundle.getBundleContext() >> bundleContext
         serviceReference.getBundle() >> bundle
@@ -56,7 +59,7 @@ class ErrorPageInjectorSpec extends Specification {
     def 'test inject error handles only servlet context'() {
 
         setup:
-        def injector = new ErrorPageInjector()
+        def injector = new ErrorPageInjector(executorService)
         curEvent.getType() >> ServiceEvent.REGISTERED
 
         when:
@@ -71,7 +74,7 @@ class ErrorPageInjectorSpec extends Specification {
     def 'test inject error ignores Service Event #e '(int e) {
 
         setup:
-        def injector = new ErrorPageInjector()
+        def injector = new ErrorPageInjector(executorService)
         curEvent.getType() >> e
 
         when:

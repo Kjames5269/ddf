@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableMap;
 import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.servlet.ServletContext;
@@ -85,28 +86,31 @@ public class ErrorPageInjector implements EventListenerHook {
   }
 
   public void init() {
-    executorService.schedule(this::checkForMissedServletContexts,1, TimeUnit.SECONDS);
+    executorService.schedule(this::checkForMissedServletContexts, 1, TimeUnit.SECONDS);
   }
 
   private void checkForMissedServletContexts() {
+
     try {
       BundleContext context = getContext();
       if (context == null) {
         return; // bundle is probably refreshing
       }
       Collection<ServiceReference<ServletContext>> references =
-              context.getServiceReferences(ServletContext.class, null);
+          context.getServiceReferences(ServletContext.class, null);
       for (ServiceReference<ServletContext> reference : references) {
         Bundle refBundle = reference.getBundle();
         BundleContext bundlectx = refBundle.getBundleContext();
         ServletContext service = bundlectx.getService(reference);
 
-        if (service.getFilterRegistration(DELEGATING_FILTER) == null) {
+        Optional<ServletContextHandler> optionalHttpContext = getHTTPContext(service, refBundle);
+
+        if (!(optionalHttpContext.get().getErrorHandler() instanceof ErrorPageErrorHandler)) {
           LOGGER.error(
-                  "Platform filter delegate failed to start in time to inject itself into {} {}. This means the {} servlet will not properly attach the user subject to requests. Attempting to resolve the issue by restarting the bundle.",
-                  refBundle.getSymbolicName(),
-                  refBundle.getBundleId(),
-                  refBundle.getSymbolicName());
+              "Platform error page injector failed to start in time to inject itself into {} {}. This means the {} servlet will not properly attach the user subject to requests. Attempting to resolve the issue by restarting the bundle.",
+              refBundle.getSymbolicName(),
+              refBundle.getBundleId(),
+              refBundle.getSymbolicName());
 
           // Restarting the missed servlet context bundle so the injector will be able to perform
           // its job.
@@ -117,12 +121,12 @@ public class ErrorPageInjector implements EventListenerHook {
 
     } catch (InvalidSyntaxException | BundleException e) {
       LOGGER.error(
-              "Problem checking ServletContexts for DelegateServletFilter injections. One of the servlets running might not have all of the needed filters injected. A system restart is recommended. See debug logs for additional details.");
+          "Problem checking ServletContexts for DelegateServletFilter injections. One of the servlets running might not have all of the needed filters injected. A system restart is recommended. See debug logs for additional details.");
       LOGGER.debug("Additional Details:", e);
     }
   }
 
-  private void injectErrorPage(ServletContext context, Bundle refBundle) {
+  private Optional<ServletContextHandler> getHTTPContext(ServletContext context, Bundle refBundle) {
 
     Field field;
     try {
@@ -135,44 +139,56 @@ public class ErrorPageInjector implements EventListenerHook {
           "Unable to find enclosing class of ServletContext for delegating the error page. The default jetty errors will display in the browser",
           e);
 
-      return;
+      return Optional.empty();
     }
-    ServletHandler handler;
 
-    // need to grab the servlet context handler so we can get down to the handler, which is what we
-    // really need
-    ServletContextHandler httpServiceContext;
     try {
-      httpServiceContext = (ServletContextHandler) field.get(context);
+      // need to grab the servlet context handler so we can get down to the handler, which is what
+      // we really need
+
+      return Optional.of((ServletContextHandler) field.get(context));
     } catch (IllegalAccessException e) {
       LOGGER.warn(
           "Unable to get the ServletContextHandler for {}. Jetty's default error page will be used for this context",
           refBundle.getSymbolicName(),
           e);
 
-      return;
+      return Optional.empty();
     }
+  }
 
-    // now that we have the handler, we can add in our own ErrorServlet
-    handler = httpServiceContext.getServletHandler();
+  private void injectErrorPage(ServletContext context, Bundle refBundle) {
 
-    ServletHolder errorServletHolder = new ServletHolder(new ErrorServlet());
-    errorServletHolder.setServletHandler(handler);
-    try {
-      errorServletHolder.start();
-      errorServletHolder.initialize();
-    } catch (Exception e) {
-      LOGGER.warn(
-          "Unable to initialize an errorServletHolder for {}. Jetty's default error page will be used for this context",
-          refBundle.getSymbolicName(),
-          e);
+    // need to grab the servlet context handler so we can get down to the handler, which is what we
+    // really need
+    Optional<ServletContextHandler> optionalHttpServiceContext = getHTTPContext(context, refBundle);
 
-      return;
+    if (optionalHttpServiceContext.isPresent()) {
+
+      ServletContextHandler httpServiceContext = optionalHttpServiceContext.get();
+      ServletHandler handler;
+
+      // now that we have the handler, we can add in our own ErrorServlet
+      handler = httpServiceContext.getServletHandler();
+
+      ServletHolder errorServletHolder = new ServletHolder(new ErrorServlet());
+      errorServletHolder.setServletHandler(handler);
+      try {
+        errorServletHolder.start();
+        errorServletHolder.initialize();
+      } catch (Exception e) {
+        LOGGER.warn(
+            "Unable to initialize an errorServletHolder for {}. Jetty's default error page will be used for this context",
+            refBundle.getSymbolicName(),
+            e);
+
+        return;
+      }
+      handler.addServletWithMapping(errorServletHolder, errorPagePath);
+
+      ErrorPageErrorHandler errorPageErrorHandler = new ErrorPageErrorHandler();
+      errorPageErrorHandler.setErrorPages(errorCodesMap);
+      httpServiceContext.setErrorHandler(errorPageErrorHandler);
     }
-    handler.addServletWithMapping(errorServletHolder, errorPagePath);
-
-    ErrorPageErrorHandler errorPageErrorHandler = new ErrorPageErrorHandler();
-    errorPageErrorHandler.setErrorPages(errorCodesMap);
-    httpServiceContext.setErrorHandler(errorPageErrorHandler);
   }
 }
