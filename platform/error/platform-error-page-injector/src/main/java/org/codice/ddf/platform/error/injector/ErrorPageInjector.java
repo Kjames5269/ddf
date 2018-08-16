@@ -104,22 +104,21 @@ public class ErrorPageInjector implements EventListenerHook {
         ServletContext service = bundlectx.getService(reference);
 
         Optional<ServletContextHandler> optionalHttpContext = getHTTPContext(service, refBundle);
+        if (optionalHttpContext.isPresent()) {
+          ErrorPageErrorHandler errorPageErrorHandler =
+              (ErrorPageErrorHandler) optionalHttpContext.get().getErrorHandler();
 
-        if (!(optionalHttpContext.get().getErrorHandler() instanceof ErrorPageErrorHandler)) {
-          LOGGER.error(
-              "Platform error page injector failed to start in time to inject itself into {} {}. This means the {} servlet will not properly attach the user subject to requests. Attempting to resolve the issue by restarting the bundle.",
-              refBundle.getSymbolicName(),
-              refBundle.getBundleId(),
-              refBundle.getSymbolicName());
-
-          // Restarting the missed servlet context bundle so the injector will be able to perform
-          // its job.
-          refBundle.stop();
-          refBundle.start();
+          if (errorPageErrorHandler.getErrorPages().isEmpty()) {
+            LOGGER.error(
+                "Platform error page injector failed to start in time to inject itself into {} {}. This means the {} servlet will not properly attach the user subject to requests. A system restart is ideal.",
+                refBundle.getSymbolicName(),
+                refBundle.getBundleId(),
+                refBundle.getSymbolicName());
+          }
         }
       }
 
-    } catch (InvalidSyntaxException | BundleException e) {
+    } catch (InvalidSyntaxException e) {
       LOGGER.error(
           "Problem checking ServletContexts for DelegateServletFilter injections. One of the servlets running might not have all of the needed filters injected. A system restart is recommended. See debug logs for additional details.");
       LOGGER.debug("Additional Details:", e);
