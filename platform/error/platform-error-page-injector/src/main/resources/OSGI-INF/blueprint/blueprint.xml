@@ -15,20 +15,8 @@
 
 <blueprint xmlns="http://www.osgi.org/xmlns/blueprint/v1.0.0">
 
-    <bean id="executor" class="java.util.concurrent.Executors" factory-method="newSingleThreadScheduledExecutor">
-        <argument ref="filterDelegateThreadFactory"/>
-    </bean>
-
-    <bean id="filterDelegateThreadFactory"
-          class="org.codice.ddf.platform.util.StandardThreadFactoryBuilder"
-          factory-method="newThreadFactory">
-        <argument value="filterDelegateThread"/>
-    </bean>
-
     <service id="ErrorPageInjector"  interface="org.osgi.framework.hooks.service.EventListenerHook">
-        <bean class="org.codice.ddf.platform.error.injector.ErrorPageInjector" init-method="init">
-            <argument ref="executor" />
-        </bean>
+        <bean class="org.codice.ddf.platform.error.injector.ErrorPageInjector" init-method="init" />
     </service>
 
 </blueprint>
