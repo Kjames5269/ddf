@@ -86,7 +86,7 @@ public class ErrorPageInjector implements EventListenerHook {
   }
 
   public void init() {
-    executorService.schedule(this::checkForMissedServletContexts, 1, TimeUnit.SECONDS);
+    checkForMissedServletContexts();
   }
 
   private void checkForMissedServletContexts() {
@@ -96,24 +96,38 @@ public class ErrorPageInjector implements EventListenerHook {
       if (context == null) {
         return; // bundle is probably refreshing
       }
-      Collection<ServiceReference<ServletContext>> references =
-          context.getServiceReferences(ServletContext.class, null);
+
+      ServiceReference<ServletContext>[] references =
+          (ServiceReference<ServletContext>[])
+              context.getAllServiceReferences(
+                  null, "(" + Constants.OBJECTCLASS + "=javax.servlet.ServletContext)");
+      if (references == null) return;
       for (ServiceReference<ServletContext> reference : references) {
+
         Bundle refBundle = reference.getBundle();
-        BundleContext bundlectx = refBundle.getBundleContext();
-        ServletContext service = bundlectx.getService(reference);
 
-        Optional<ServletContextHandler> optionalHttpContext = getHTTPContext(service, refBundle);
-        if (optionalHttpContext.isPresent()) {
-          ErrorPageErrorHandler errorPageErrorHandler =
-              (ErrorPageErrorHandler) optionalHttpContext.get().getErrorHandler();
+        //  If the bundle is active then there is a problem. If the bundle is not active we'll catch
+        // it when it gets initialized... (or at least I think thats how OSGI works)
+        //  This could open up race conditions... but I hope not :shrug:
+        if (refBundle.getState() == Bundle.ACTIVE) {
+          BundleContext bundlectx = refBundle.getBundleContext();
+          ServletContext service = bundlectx.getService(reference);
 
-          if (errorPageErrorHandler.getErrorPages().isEmpty()) {
-            LOGGER.error(
-                "Platform error page injector failed to start in time to inject itself into {} {}. This means the {} servlet will not properly attach the user subject to requests. A system restart is ideal.",
-                refBundle.getSymbolicName(),
-                refBundle.getBundleId(),
-                refBundle.getSymbolicName());
+          Optional<ServletContextHandler> optionalHttpContext = getHTTPContext(service, refBundle);
+          if (optionalHttpContext.isPresent()) {
+
+            ErrorPageErrorHandler errorPageErrorHandler =
+                (ErrorPageErrorHandler) optionalHttpContext.get().getErrorHandler();
+
+            if (errorPageErrorHandler.getErrorPages().isEmpty()) {
+
+              createAndAddErrorPageHandler(optionalHttpContext.get(), refBundle);
+              LOGGER.error(
+                  "Platform error page injector failed to start in time to inject itself into {} {}. This means the {} servlet will not properly attach the user subject to requests. A system restart is ideal.",
+                  refBundle.getSymbolicName(),
+                  refBundle.getBundleId(),
+                  refBundle.getSymbolicName());
+            }
           }
         }
       }
@@ -164,30 +178,32 @@ public class ErrorPageInjector implements EventListenerHook {
 
     if (optionalHttpServiceContext.isPresent()) {
 
-      ServletContextHandler httpServiceContext = optionalHttpServiceContext.get();
-      ServletHandler handler;
-
-      // now that we have the handler, we can add in our own ErrorServlet
-      handler = httpServiceContext.getServletHandler();
-
-      ServletHolder errorServletHolder = new ServletHolder(new ErrorServlet());
-      errorServletHolder.setServletHandler(handler);
-      try {
-        errorServletHolder.start();
-        errorServletHolder.initialize();
-      } catch (Exception e) {
-        LOGGER.warn(
-            "Unable to initialize an errorServletHolder for {}. Jetty's default error page will be used for this context",
-            refBundle.getSymbolicName(),
-            e);
-
-        return;
-      }
-      handler.addServletWithMapping(errorServletHolder, errorPagePath);
-
-      ErrorPageErrorHandler errorPageErrorHandler = new ErrorPageErrorHandler();
-      errorPageErrorHandler.setErrorPages(errorCodesMap);
-      httpServiceContext.setErrorHandler(errorPageErrorHandler);
+      createAndAddErrorPageHandler(optionalHttpServiceContext.get(), refBundle);
     }
+  }
+
+  private void createAndAddErrorPageHandler(
+      ServletContextHandler httpServiceContext, Bundle refBundle) {
+    // now that we have the handler, we can add in our own ErrorServlet
+    ServletHandler handler = httpServiceContext.getServletHandler();
+
+    ServletHolder errorServletHolder = new ServletHolder(new ErrorServlet());
+    errorServletHolder.setServletHandler(handler);
+    try {
+      errorServletHolder.start();
+      errorServletHolder.initialize();
+    } catch (Exception e) {
+      LOGGER.warn(
+          "Unable to initialize an errorServletHolder for {}. Jetty's default error page will be used for this context",
+          refBundle.getSymbolicName(),
+          e);
+
+      return;
+    }
+    handler.addServletWithMapping(errorServletHolder, errorPagePath);
+
+    ErrorPageErrorHandler errorPageErrorHandler = new ErrorPageErrorHandler();
+    errorPageErrorHandler.setErrorPages(errorCodesMap);
+    httpServiceContext.setErrorHandler(errorPageErrorHandler);
   }
 }
