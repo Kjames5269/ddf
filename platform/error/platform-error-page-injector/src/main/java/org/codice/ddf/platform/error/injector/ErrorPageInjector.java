@@ -56,9 +56,11 @@ public class ErrorPageInjector implements EventListenerHook {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(ErrorPageInjector.class);
 
-  Optional<Bundle> getBundle() {
+  Optional<BundleContext> getContext() {
     final Bundle cxfBundle = FrameworkUtil.getBundle(ErrorPageInjector.class);
-    return Optional.ofNullable(cxfBundle);
+    return (cxfBundle != null)
+            ? Optional.of(cxfBundle.getBundleContext())
+            : Optional.empty();
   }
 
   @Override
@@ -80,16 +82,15 @@ public class ErrorPageInjector implements EventListenerHook {
   @SuppressWarnings("unchecked")
   private void checkForMissedServletContexts() {
 
-    Optional<Bundle> optionalBundle = getBundle();
-    if (!optionalBundle.isPresent()) {
+    Optional<BundleContext> optionalBundleContext = getContext();
+    if (!optionalBundleContext.isPresent()) {
       LOGGER.error(
           "Problem retrieving the bundle `Platform :: Error :: Page Injector` after it's just been initialized");
       return; // This should never happen
     }
 
     //  Get all registered servletContexts in OSGI
-    final Bundle bundle = optionalBundle.get();
-    final BundleContext context = bundle.getBundleContext();
+    final BundleContext context = optionalBundleContext.get();
     ServiceReference<ServletContext>[] references = null;
 
     try {
@@ -100,7 +101,7 @@ public class ErrorPageInjector implements EventListenerHook {
 
     } catch (InvalidSyntaxException e) {
       LOGGER.error(
-          "Problem checking ServletContexts for PlatformErrorPageInjector. One of the servlets running might print stack traces to the browser. A system restart is recommended. See debug logs for additional details.");
+          "Problem getting ServletContexts from OSGI, One of the servlets running might print stack traces to the browser. A system restart is recommended. See debug logs for additional details.");
       LOGGER.debug("Additional Details:", e);
     }
 
