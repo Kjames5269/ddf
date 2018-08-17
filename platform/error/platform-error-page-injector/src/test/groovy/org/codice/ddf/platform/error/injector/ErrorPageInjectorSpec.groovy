@@ -17,6 +17,7 @@ package org.codice.ddf.platform.error.injector
 import org.eclipse.jetty.servlet.ErrorPageErrorHandler
 import org.osgi.framework.Bundle
 import org.osgi.framework.BundleContext
+import org.osgi.framework.FrameworkUtil
 import org.osgi.framework.ServiceEvent
 import org.osgi.framework.ServiceReference
 import spock.lang.Shared
@@ -48,7 +49,6 @@ class ErrorPageInjectorSpec extends Specification {
         bundleContext    = Mock(BundleContext.class)
         servletContext   = Mock(ServletContext.class)
         service          = Mock(Servlet.class)
-        executorService  = Mock(ScheduledExecutorService.class)
 
         bundle.getBundleContext() >> bundleContext
         serviceReference.getBundle() >> bundle
@@ -59,7 +59,7 @@ class ErrorPageInjectorSpec extends Specification {
     def 'test inject error handles only servlet context'() {
 
         setup:
-        def injector = new ErrorPageInjector(executorService)
+        def injector = new ErrorPageInjector()
         curEvent.getType() >> ServiceEvent.REGISTERED
 
         when:
@@ -74,7 +74,7 @@ class ErrorPageInjectorSpec extends Specification {
     def 'test inject error ignores Service Event #e '(int e) {
 
         setup:
-        def injector = new ErrorPageInjector(executorService)
+        def injector = new ErrorPageInjector()
         curEvent.getType() >> e
 
         when:
@@ -85,6 +85,20 @@ class ErrorPageInjectorSpec extends Specification {
 
         where:
         e << [ ServiceEvent.UNREGISTERING, ServiceEvent.MODIFIED_ENDMATCH, ServiceEvent.MODIFIED ]
+    }
+
+    def 'test init returns on a null bundle '() {
+        setup:
+        def injector = new ErrorPageInjector()
+        //  Because optionals can't be mocked this leads to a null pointer if a mocked bundle is returned
+        bundle.getBundleContext() >> null
+        bundleContext.getAllServiceReferences(null, _) >> null
+
+        when:
+        injector.init()
+
+        then:
+        0 * bundleContext.getAllServiceReferences(_,_);
     }
 
 }
