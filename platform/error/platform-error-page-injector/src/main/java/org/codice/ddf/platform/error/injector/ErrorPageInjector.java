@@ -58,9 +58,7 @@ public class ErrorPageInjector implements EventListenerHook {
 
   Optional<BundleContext> getContext() {
     final Bundle cxfBundle = FrameworkUtil.getBundle(ErrorPageInjector.class);
-    return (cxfBundle != null)
-            ? Optional.of(cxfBundle.getBundleContext())
-            : Optional.empty();
+    return (cxfBundle != null) ? Optional.of(cxfBundle.getBundleContext()) : Optional.empty();
   }
 
   @Override
