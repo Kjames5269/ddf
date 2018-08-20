@@ -13,104 +13,161 @@
  */
 package ddf.test.itests.platform;
 
-import static com.jayway.restassured.RestAssured.given;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.isEmptyString;
-import static org.hamcrest.Matchers.not;
 
-import com.jayway.restassured.path.json.JsonPath;
-import com.jayway.restassured.response.Response;
-import java.util.List;
+import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.stream.Collectors;
+import javax.servlet.ServletContext;
 import org.codice.ddf.itests.common.AbstractIntegrationTest;
-import org.codice.ddf.platform.logging.LogEvent;
 import org.codice.ddf.test.common.LoggingUtils;
-import org.codice.ddf.test.common.annotations.BeforeExam;
+import org.eclipse.jetty.servlet.ErrorPageErrorHandler;
+import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.ops4j.pax.exam.junit.PaxExam;
 import org.ops4j.pax.exam.spi.reactors.ExamReactorStrategy;
 import org.ops4j.pax.exam.spi.reactors.PerSuite;
+import org.osgi.framework.Bundle;
+import org.osgi.framework.BundleContext;
+import org.osgi.framework.Constants;
+import org.osgi.framework.ServiceReference;
 
 @RunWith(PaxExam.class)
 @ExamReactorStrategy(PerSuite.class)
-public class TestPlatform extends AbstractIntegrationTest {
-
-  private static final DynamicUrl LOGGING_SERVICE_JOLOKIA_URL =
-      new DynamicUrl(
-          DynamicUrl.SECURE_ROOT,
-          HTTPS_PORT,
-          "/admin/jolokia/exec/org.codice.ddf.platform.logging.LoggingService:service=logging-service/retrieveLogEvents");
-
-  private static final DynamicUrl REPORT_GENERATION_URL =
-      new DynamicUrl(DynamicUrl.SECURE_ROOT, HTTPS_PORT, "/services/internal/metrics/report.xls");
+public class TestErrorPageInjector extends AbstractIntegrationTest {
 
   public static final String ADMIN = "admin";
-
-  @BeforeExam
-  public void beforeTest() throws Exception {
+  //  100 % tilt
+  @SuppressWarnings("unchecked")
+  private ServiceReference<ServletContext>[] setup() throws Exception {
     try {
+      LOGGER.error("Entering B e f o r e");
       waitForSystemReady();
       // Start the services needed for testing.
-      getServiceManager().startFeature(true, "metrics-reporting");
-      getServiceManager().waitForAllBundles();
-      // We need to start the Search UI to test that it redirects properly
+      getServiceManager().startFeature(true, "security-services-app");
+
+      BundleContext bundleContext = getServiceManager().getBundleContext();
+      return (ServiceReference<ServletContext>[])
+          bundleContext.getAllServiceReferences(
+              null, "(" + Constants.OBJECTCLASS + "=javax.servlet.ServletContext)");
+
     } catch (Exception e) {
       LoggingUtils.failWithThrowableStacktrace(e, "Failed in @BeforeExam: ");
     }
+    return null;
   }
 
   @Test
-  public void testLoggingServiceEndpoint() throws Exception {
-
-    Response response =
-        given()
-            .auth()
-            .preemptive()
-            .basic(ADMIN, ADMIN)
-            .header("X-Requested-With", "XMLHttpRequest")
-            .header("Origin", LOGGING_SERVICE_JOLOKIA_URL.getUrl())
-            .expect()
-            .statusCode(200)
-            .when()
-            .get(LOGGING_SERVICE_JOLOKIA_URL.getUrl());
-
-    String bodyString = checkResponseBody(response, LOGGING_SERVICE_JOLOKIA_URL);
-
-    final List events = JsonPath.given(bodyString).get("value");
-    final Map firstEvent = (Map) events.get(0);
-    final String levelOfFirstEvent = firstEvent.get("level").toString();
-    final String unknownLevel = LogEvent.Level.UNKNOWN.getLevel();
-    assertThat(
-        String.format(
-            "The level of an event returned by %s should not be %s",
-            LOGGING_SERVICE_JOLOKIA_URL, unknownLevel),
-        levelOfFirstEvent,
-        not(equalTo(unknownLevel)));
+  public void testErrorPagesGotInjected() throws Exception {
+    testErrorPagesGotInjectedHelper(setup());
   }
 
   @Test
-  public void testPlatformMetricsReportGeneration() {
-    Response response =
-        given()
-            .auth()
-            .preemptive()
-            .basic(ADMIN, ADMIN)
-            .expect()
-            .statusCode(200)
-            .when()
-            .get(REPORT_GENERATION_URL.getUrl());
+  public void testErrorPagesInjectorRestartHavoc() throws Exception {
+    ServiceReference<ServletContext>[] references = setup();
+    int len = references.length;
+    String[] a =
+        Arrays.stream(references)
+            .map(p -> p.getBundle().getSymbolicName())
+            .collect(Collectors.toList())
+            .toArray(new String[len]);
 
-    checkResponseBody(response, REPORT_GENERATION_URL);
+    getServiceManager().stopBundle("platform-error-page-injector");
+    getServiceManager().restartBundles(Arrays.copyOfRange(a, 0, len / 2));
+    getServiceManager().startBundle("platform-error-page-injector");
+    getServiceManager().restartBundles(Arrays.copyOfRange(a, len / 2, len));
+
+    getServiceManager().waitForAllBundles();
+    testErrorPagesGotInjectedHelper(references);
   }
 
-  private String checkResponseBody(Response response, DynamicUrl url) {
-    final String bodyString = response.getBody().asString();
-    assertThat(
-        String.format("The response body from %s should not be empty", url),
-        bodyString,
-        not(isEmptyString()));
-    return bodyString;
+  @Test
+  public void testErrorPageInjectorStartingLast() throws Exception {
+    ServiceReference<ServletContext>[] references = setup();
+    int len = references.length;
+    String[] a =
+        Arrays.stream(references)
+            .map(p -> p.getBundle().getSymbolicName())
+            .collect(Collectors.toList())
+            .toArray(new String[len]);
+    getServiceManager().stopBundle("platform-error-page-injector");
+    getServiceManager().restartBundles(a);
+    getServiceManager().startBundle("platform-error-page-injector");
+
+    getServiceManager().waitForAllBundles();
+    testErrorPagesGotInjectedHelper(references);
   }
+
+  private void testErrorPagesGotInjectedHelper(ServiceReference<ServletContext>[] references)
+      throws Exception {
+
+    if (references == null) {
+      LOGGER.error("Hello? Good sir???");
+      Bundle[] bundles = getServiceManager().getBundleContext().getBundles();
+      for (Bundle bundle : bundles) {
+        LOGGER.error(
+            "{} : {}", bundle.getSymbolicName(), (bundle.getState() == 32) ? "ACTIVE" : "?");
+      }
+    }
+
+    for (ServiceReference<ServletContext> reference : references) {
+      final Bundle refBundle = reference.getBundle();
+      ServletContextHandler httpContext = getHttpContext(reference);
+
+      ErrorPageErrorHandler errorPageErrorHandler =
+          (ErrorPageErrorHandler) httpContext.getErrorHandler();
+      final Map<String, String> errorPages = errorPageErrorHandler.getErrorPages();
+      assertThat(
+          "Error page has been injected into " + refBundle.getSymbolicName(),
+          !errorPages.isEmpty());
+    }
+  }
+
+  private ServletContextHandler getHttpContext(ServiceReference<ServletContext> reference)
+      throws Exception {
+
+    BundleContext bundlectx = null;
+    do
+      try {
+        final Bundle refBundle = reference.getBundle();
+        //  When bundle wait all doesn't work and you're 110% tilt.
+        bundlectx = refBundle.getBundleContext();
+      } catch (Exception e) {
+        Thread.sleep(500);
+      }
+    while (bundlectx == null);
+
+    ServletContext service = bundlectx.getService(reference);
+    Field field = service.getClass().getDeclaredField("this$0");
+    field.setAccessible(true);
+    return (ServletContextHandler) field.get(service);
+  }
+
+  //    Response response =
+  //        given()
+  //            .auth()
+  //            .preemptive()
+  //            .basic(ADMIN, ADMIN)
+  //            .header("X-Requested-With", "XMLHttpRequest")
+  //            .header("Origin", LOGGING_SERVICE_JOLOKIA_URL.getUrl())
+  //            .expect()
+  //            .statusCode(200)
+  //            .when()
+  //            .get(LOGGING_SERVICE_JOLOKIA_URL.getUrl());
+  //
+  //    String bodyString = checkResponseBody(response, LOGGING_SERVICE_JOLOKIA_URL);
+  //
+  //    final List events = JsonPath.given(bodyString).get("value");
+  //    final Map firstEvent = (Map) events.get(0);
+  //    final String levelOfFirstEvent = firstEvent.get("level").toString();
+  //    final String unknownLevel = LogEvent.Level.UNKNOWN.getLevel();
+  //    assertThat(
+  //        String.format(
+  //            "The level of an event returned by %s should not be %s",
+  //            LOGGING_SERVICE_JOLOKIA_URL, unknownLevel),
+  //        levelOfFirstEvent,
+  //        not(equalTo(unknownLevel)));
+  //  }
 }
