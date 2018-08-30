@@ -13,8 +13,19 @@ priority "grant";
 // For example, adding a permission for "/test/path" and "/test/path/" are equivalent. The recursive forms
 // "/test/path${/}-", and "/test/path/${/}-" are also equivalent.
 
-// IMPORTANT! - Adding new permissions requires a system restart to take affect.
-
+//                        IMPORTANT INFORMATION REGARDING PERMISSIONS
+//
+// - Adding new permissions requires a system restart to take affect.
+//
+// - When adding a permission it is necessary to grant permissions to both the directory containing the
+//   resource as well as the resource itself. If the process needs to create or remove files in that
+//   directory then the process must have write access to that directory as well as read access.
+//   For example, if a process needs to create, read and write a file "policy.config" the permissions would look
+//   like this:
+//
+//      permission java.io.FilePermission "<DIRECTORY_PATH>", "read, write";
+//      permission java.io.FilePermission "<DIRECTORY_PATH>${/}policy.config", "read, write"
+//
 
 //                        Content Directory Monitor (CDM) Permissions
 // Adding required permissions for a new Content Directory Monitor.
@@ -26,10 +37,6 @@ priority "grant";
 //   1. permission java.io.FilePermission "<DIRECTORY_PATH>", "read";
 //   2. permission java.io.FilePermission "<DIRECTORY_PATH>${/}-", "read, write";
 // Replacing <DIRECTORY_PATH> with the path of the directory being monitored.
-//
-// Line 1 gives the CDM the permissions to read from the monitored directory path. Line 2 gives the
-// CDM the permissions to recursively read and write from the monitored directory path, specified
-// by the directory path's suffix "${/}-".
 //
 // If a CDM configuration is deleted, then the corresponding permissions that were added should be
 // deleted to avoid granting unnecessary permissions to parts of the system.
@@ -45,16 +52,11 @@ grant codeBase "file:/catalog-core-directorymonitor/org.apache.camel.camel-core/
 //                        URL Resource Reader Permissions
 // Adding required permissions for the URL Resource Reader to retrieve file resources.
 //
-//
 // Configuring the URL Resource Reader requires adding read permissions to the directory being read from.
 // For the following 2 permissions are required:
 //   1. permission java.io.FilePermission "<DIRECTORY_PATH>", "read";
 //   2. permission java.io.FilePermission "<DIRECTORY_PATH>${/}-", "read";
 // Replacing <DIRECTORY_PATH> with the path of the directory containing file resources.
-//
-// Line 1 gives the URL Resource Reader the permissions to read from the directory. Line 2 gives the
-// Resource Reader the permissions to recursively read from the directory path, specified
-// by the directory path's suffix "${/}-".
 //
 grant codeBase "file:/org.apache.tika.core/catalog-core-urlresourcereader" {
     // Add required URL Resource Reader permissions here.
@@ -64,18 +66,22 @@ grant codeBase "file:/org.apache.tika.core/catalog-core-urlresourcereader" {
     // permission java.io.FilePermission "/test/some/directory${/}-", "read";
 }
 
-//                       Security-Hardening: Backup Log File Permissions
-//  Adding required permissions to the logger for read and write access to modified backup log files
+//                        Security-Hardening: Backup Log File Permissions
+// Adding required permissions to the logger for read and write access to modified backup log files
 //
-//  If you want to change the default location of the backup security log files, add a new permission
-//  allowing the logger to create and modify the files within the new directory.
-//  If you haven't already done so, follow the Enabling Fallback Audit Logging steps in the security hardening
-//  checklist to finish configuring backup logging
+// Configuring the backup log file permissions requires adding read and write permissions to the backup directory.
+// For this, the following 2 permissions are required:
+//   1. permission java.io.FilePermission "<DIRECTORY_PATH>", "read, write";
+//   2. permission java.io.FilePermission "<DIRECTORY_PATH>${/}*", "read, write";
+// Replacing <DIRECTORY_PATH> with the path of the directory containing file resources.
+//
+// If you haven't already done so, follow the Enabling Fallback Audit Logging steps in the security hardening
+// checklist to finish configuring backup logging
 //
 grant codeBase "file:/pax-logging-log4j2" {
     //  Add required permissions here.
 
     //  Example:
-    //  permission java.io.FilePermission "/the/new/log/directory/-", "read, write";
     //  permission java.io.FilePermission "/the/new/log/directory", "read, write";
+    //  permission java.io.FilePermission "/the/new/log/directory/*", "read, write";
 }
