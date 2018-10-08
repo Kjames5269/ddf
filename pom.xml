@@ -139,9 +139,9 @@
              for versionAsInProject() doesn't work and failsafe has problems connecting to the
              container and running the tests -->
         <failsafe.pax-exam-compatible.version>2.17</failsafe.pax-exam-compatible.version>
-        <tika.version>1.18</tika.version>
-        <tika.thirdparty.bundle.version>1.18.0_2</tika.thirdparty.bundle.version>
-        <poi.version>3.17</poi.version>
+        <tika.version>1.19.1</tika.version>
+        <tika.thirdparty.bundle.version>1.19.0_1</tika.thirdparty.bundle.version>
+        <poi.version>4.0.0</poi.version>
         <poi.contrib.version>3.7-beta3</poi.contrib.version>
         <commons-lang.version>2.6</commons-lang.version>
         <commons-lang3.version>3.7</commons-lang3.version>
