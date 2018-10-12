@@ -42,10 +42,7 @@ public class SaxEventToXmlElementConverterTest {
 
     String reconstructedExpectation =
         // @formatter:off
-        "<x xmlns='foobar'>"
-            + "    <good1 a='1' b='2'></good1>"
-            + "    <good2 a='1' xmlns:ns1='foobar' ns1:a='2'></good2>"
-            + "</x>";
+        "<x xmlns='foobar'>" + "    <good1 a='1' b='2'/>" + "    <good2 a='1' a='2'/>" + "</x>";
     // @formatter:on
     TestSaxParser parser = new TestSaxParser();
     String reconstructedXml = parser.parseAndReconstruct(doubleDeclaredNamespaceUriSnippet);
@@ -67,8 +64,8 @@ public class SaxEventToXmlElementConverterTest {
     String reconstructedExpectation =
         // @formatter:off
         "<x xmlns='foobar'>"
-            + "    <good1 a='1' b='2'></good1>"
-            + "    <good2 a='1' xmlns:ns2='foobar' ns2:a='2' xmlns:ns1='notfoobar' ns1:a='3'></good2>"
+            + "    <good1 a='1' b='2'/>"
+            + "    <good2 a='1' a='2' xmlns:ns1='notfoobar' ns1:a='3'/>"
             + "</x>";
     // @formatter:on
     TestSaxParser parser = new TestSaxParser();
@@ -124,7 +121,7 @@ public class SaxEventToXmlElementConverterTest {
             + "    <aaa:foo xmlns:aaa='whocares' name='outside'>"
             + "        <aaa:bar>"
             + "            <bbb:baz xmlns:bbb='inside1'>"
-            + "                <aaa:verybad xmlns:aaa='inside2' name='scope matters'></aaa:verybad>"
+            + "                <aaa:verybad xmlns:aaa='inside2' name='scope matters'/>"
             + "            </bbb:baz>"
             + "        </aaa:bar>"
             + "    </aaa:foo>"

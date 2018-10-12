@@ -79,7 +79,7 @@ public class KmlMarshallerTest {
     assertThat(feature.getName(), is("Simple placemark"));
   }
 
-  @Test(expected = NoSuchElementException.class)
+  @Test(expected = IllegalArgumentException.class)
   public void unmarshallNullStream() {
     final Kml kml = kmlMarshaller.unmarshal(null).get();
     final Feature feature = kml.getFeature();
