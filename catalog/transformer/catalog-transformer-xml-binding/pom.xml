@@ -34,7 +34,7 @@
                     <artifactId>gml-v_3_1_1-schema</artifactId>
                 </exclusion>
                 <exclusion>
-                    <groupId>com.vividsolutions</groupId>
+                    <groupId>org.locationtech.jts</groupId>
                     <artifactId>jts</artifactId>
                 </exclusion>
             </exclusions>
@@ -45,12 +45,8 @@
             <version>1.1.0</version>
         </dependency>
         <dependency>
-            <groupId>com.vividsolutions</groupId>
+            <groupId>org.locationtech.jts</groupId>
             <artifactId>jts-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.vividsolutions</groupId>
-            <artifactId>jts-io</artifactId>
         </dependency>
     </dependencies>
     <build>

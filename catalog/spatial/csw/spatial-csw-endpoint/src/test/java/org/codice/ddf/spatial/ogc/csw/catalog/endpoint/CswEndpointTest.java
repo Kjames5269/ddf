@@ -34,7 +34,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.Iterables;
-import com.vividsolutions.jts.io.ParseException;
 import ddf.catalog.CatalogFramework;
 import ddf.catalog.data.Metacard;
 import ddf.catalog.data.Result;
@@ -139,6 +138,7 @@ import org.codice.ddf.spatial.ogc.csw.catalog.common.transaction.UpdateActionImp
 import org.codice.ddf.spatial.ogc.csw.catalog.common.transformer.TransformerManager;
 import org.codice.ddf.spatial.ogc.csw.catalog.endpoint.transformer.CswActionTransformerProvider;
 import org.junit.Test;
+import org.locationtech.jts.io.ParseException;
 import org.mockito.ArgumentCaptor;
 import org.opengis.filter.sort.SortBy;
 import org.osgi.framework.Bundle;

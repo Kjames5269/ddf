@@ -229,12 +229,8 @@
             <artifactId>commons-collections4</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.vividsolutions</groupId>
+            <groupId>org.locationtech.jts</groupId>
             <artifactId>jts-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.vividsolutions</groupId>
-            <artifactId>jts-io</artifactId>
         </dependency>
         <dependency>
             <groupId>ddf.measure</groupId>
@@ -427,15 +423,15 @@
                         <Import-Package>
                             !org.eclipse.jetty.server.bio,
                             !org.eclipse.jetty.server.ssl,
-                            com.vividsolutions.jts.algorithm,
-                            com.vividsolutions.jts.geom,
-                            com.vividsolutions.jts.geom.impl,
-                            com.vividsolutions.jts.geom.prep,
-                            com.vividsolutions.jts.io,
-                            com.vividsolutions.jts.operation.union,
-                            com.vividsolutions.jts.operation.valid,
-                            com.vividsolutions.jts.simplify,
-                            com.vividsolutions.jts.util,
+                            org.locationtech.jts.algorithm,
+                            org.locationtech.jts.geom,
+                            org.locationtech.jts.geom.impl,
+                            org.locationtech.jts.geom.prep,
+                            org.locationtech.jts.io,
+                            org.locationtech.jts.operation.union,
+                            org.locationtech.jts.operation.valid,
+                            org.locationtech.jts.simplify,
+                            org.locationtech.jts.util,
                             ddf.action.impl,
                             ddf.action;version="1.0",
                             ddf.catalog.configuration,

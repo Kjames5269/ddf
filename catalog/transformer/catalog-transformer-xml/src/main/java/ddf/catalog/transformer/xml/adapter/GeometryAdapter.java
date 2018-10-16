@@ -13,11 +13,6 @@
  */
 package ddf.catalog.transformer.xml.adapter;
 
-import com.vividsolutions.jts.geom.Geometry;
-import com.vividsolutions.jts.geom.GeometryFactory;
-import com.vividsolutions.jts.io.ParseException;
-import com.vividsolutions.jts.io.WKTReader;
-import com.vividsolutions.jts.io.WKTWriter;
 import ddf.catalog.data.Attribute;
 import ddf.catalog.data.impl.AttributeImpl;
 import ddf.catalog.transform.CatalogTransformerException;
@@ -31,6 +26,11 @@ import org.jvnet.jaxb2_commons.locator.DefaultRootObjectLocator;
 import org.jvnet.ogc.gml.v_3_1_1.jts.ConversionFailedException;
 import org.jvnet.ogc.gml.v_3_1_1.jts.GML311ToJTSGeometryConverter;
 import org.jvnet.ogc.gml.v_3_1_1.jts.JTSToGML311GeometryConverter;
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.io.ParseException;
+import org.locationtech.jts.io.WKTReader;
+import org.locationtech.jts.io.WKTWriter;
 
 public class GeometryAdapter extends XmlAdapter<GeometryElement, Attribute> {
 
@@ -55,6 +55,8 @@ public class GeometryAdapter extends XmlAdapter<GeometryElement, Attribute> {
               "Could not transform Metacard to XML.  Invalid WKT.", e);
         }
 
+
+          jtsGeometry.toText();
         JTSToGML311GeometryConverter converter = new JTSToGML311GeometryConverter();
 
         @SuppressWarnings("unchecked")
@@ -69,6 +71,10 @@ public class GeometryAdapter extends XmlAdapter<GeometryElement, Attribute> {
     return element;
   }
 
+  public static Geometry convertPackages(com.vividsolutions.jts.geom.Geometry old) {
+    Geometry temp;
+  }
+
   public static Attribute unmarshalFrom(GeometryElement element) throws ConversionFailedException {
     AttributeImpl attribute = null;
     GML311ToJTSGeometryConverter converter = new GML311ToJTSGeometryConverter();
@@ -76,8 +82,12 @@ public class GeometryAdapter extends XmlAdapter<GeometryElement, Attribute> {
 
     for (Value xmlValue : element.getValue()) {
       JAXBElement<AbstractGeometryType> xmlGeometry = xmlValue.getGeometry();
-      Geometry geometry =
+
+      com.vividsolutions.jts.geom.Geometry geometry =
           converter.createGeometry(new DefaultRootObjectLocator(xmlValue), xmlGeometry.getValue());
+
+      geometry.getCoordinates();
+
       String wkt = wktWriter.write(geometry);
 
       if (attribute == null) {

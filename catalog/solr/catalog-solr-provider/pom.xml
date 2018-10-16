@@ -80,14 +80,14 @@
                         </Include-Resource>
                         <Export-Package />
                         <Import-Package>
-                            com.vividsolutions.jts.algorithm,
-                            com.vividsolutions.jts.geom,
-                            com.vividsolutions.jts.geom.impl,
-                            com.vividsolutions.jts.io,
-                            com.vividsolutions.jts.operation.union,
-                            com.vividsolutions.jts.operation.valid,
-                            com.vividsolutions.jts.simplify,
-                            com.vividsolutions.jts.util,
+                            org.locationtech.jts.algorithm,
+                            org.locationtech.jts.geom,
+                            org.locationtech.jts.geom.impl,
+                            org.locationtech.jts.io,
+                            org.locationtech.jts.operation.union,
+                            org.locationtech.jts.operation.valid,
+                            org.locationtech.jts.simplify,
+                            org.locationtech.jts.util,
                             ddf.catalog.data;version="[2.0,3)",
                             ddf.catalog.data.types;version="[2.0,3)",
                             ddf.catalog.filter;version="[2.0,3)",

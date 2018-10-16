@@ -82,7 +82,7 @@
         <javax.ws.rs.version>2.1</javax.ws.rs.version>
         <bouncy.version>1.60</bouncy.version>
         <xmlsec.version>2.1.2</xmlsec.version>
-        <jts.version>1.14.0</jts.version>
+        <jts.version>1.15.0</jts.version>
         <jts.bundle.version>1.14.0_1</jts.bundle.version>
         <opendj-embedded.app.version>1.3.3</opendj-embedded.app.version>
 
@@ -116,8 +116,8 @@
         <felix.framework.version>5.6.6</felix.framework.version>
         <decanter.version>1.3.0</decanter.version>
         <lux.version>1.2</lux.version>
-        <org.geotools.version>19.1</org.geotools.version>
-        <opengis.version>19.1</opengis.version>
+        <org.geotools.version>20.0</org.geotools.version>
+        <opengis.version>20.0</opengis.version>
         <opengis.bundle.version>${opengis.version}_1</opengis.bundle.version>
         <org.geotools.bundle.version>${org.geotools.version}_1</org.geotools.bundle.version>
         <org.slf4j.version>1.7.1</org.slf4j.version>

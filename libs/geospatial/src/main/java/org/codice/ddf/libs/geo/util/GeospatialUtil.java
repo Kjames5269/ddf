@@ -13,13 +13,13 @@
  */
 package org.codice.ddf.libs.geo.util;
 
-import com.vividsolutions.jts.geom.Geometry;
 import org.apache.commons.collections.CollectionUtils;
 import org.codice.ddf.libs.geo.GeoFormatException;
 import org.geotools.factory.Hints;
 import org.geotools.geometry.jts.JTS;
 import org.geotools.referencing.CRS;
 import org.geotools.referencing.ReferencingFactoryFinder;
+import org.locationtech.jts.geom.Geometry;
 import org.opengis.referencing.FactoryException;
 import org.opengis.referencing.ReferenceIdentifier;
 import org.opengis.referencing.crs.CRSAuthorityFactory;

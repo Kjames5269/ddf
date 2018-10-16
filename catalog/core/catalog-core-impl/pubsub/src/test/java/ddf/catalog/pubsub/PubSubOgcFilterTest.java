@@ -16,9 +16,6 @@ package ddf.catalog.pubsub;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.vividsolutions.jts.geom.Coordinate;
-import com.vividsolutions.jts.geom.Geometry;
-import com.vividsolutions.jts.geom.Point;
 import ddf.catalog.data.Metacard;
 import ddf.catalog.data.impl.MetacardImpl;
 import java.util.Date;
@@ -31,6 +28,9 @@ import org.geotools.geometry.jts.JTSFactoryFinder;
 import org.geotools.referencing.crs.DefaultGeographicCRS;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.Point;
 import org.opengis.feature.Feature;
 import org.opengis.feature.GeometryAttribute;
 import org.opengis.feature.simple.SimpleFeature;
@@ -121,9 +121,9 @@ public class PubSubOgcFilterTest {
     featureBuilder.set(Metacard.EFFECTIVE, new Date());
     featureBuilder.set(Metacard.METADATA, null);
 
-    com.vividsolutions.jts.geom.GeometryFactory geoFactory =
+    org.locationtech.jts.geom.GeometryFactory geoFactory =
         JTSFactoryFinder.getGeometryFactory(null);
-    com.vividsolutions.jts.geom.Point point = geoFactory.createPoint(new Coordinate(-112, 28));
+    org.locationtech.jts.geom.Point point = geoFactory.createPoint(new Coordinate(-112, 28));
     featureBuilder.set(Metacard.GEOGRAPHY, point);
     return featureBuilder.buildFeature("KTF1");
   }
@@ -163,7 +163,7 @@ public class PubSubOgcFilterTest {
     b.add("classification", Integer.class);
     b.add("height", Double.class);
 
-    com.vividsolutions.jts.geom.GeometryFactory geoFactory =
+    org.locationtech.jts.geom.GeometryFactory geoFactory =
         JTSFactoryFinder.getGeometryFactory(null);
 
     // add geo
@@ -176,7 +176,7 @@ public class PubSubOgcFilterTest {
     featureBuilder.set("name", "FirstFeature");
     featureBuilder.set("classification", 10);
     featureBuilder.set("height", 5.8);
-    com.vividsolutions.jts.geom.Point point = geoFactory.createPoint(new Coordinate(-112, 28));
+    org.locationtech.jts.geom.Point point = geoFactory.createPoint(new Coordinate(-112, 28));
     featureBuilder.set("geo", point);
     SimpleFeature feature = featureBuilder.buildFeature("f1");
 
