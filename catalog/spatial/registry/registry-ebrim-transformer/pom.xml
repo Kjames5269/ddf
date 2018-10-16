@@ -34,7 +34,7 @@
             <version>1.0.3</version>
             <exclusions>
                 <exclusion>
-                    <groupId>org.locationtech.jts</groupId>
+                    <groupId>com.vividsolutions</groupId>
                     <artifactId>jts</artifactId>
                 </exclusion>
                 <exclusion>
@@ -49,10 +49,10 @@
             <version>1.1.0</version>
         </dependency>
         <dependency>
-            <groupId>org.locationtech.jts</groupId>
+            <groupId>com.vividsolutions</groupId>
             <artifactId>jts-core</artifactId>
+            <version>1.14.0</version>
         </dependency>
-
         <dependency>
             <groupId>ddf.catalog.core</groupId>
             <artifactId>catalog-core-api-impl</artifactId>
