@@ -1,7 +1,7 @@
 ---
 name: Task
 about: Dependency Upgrade, Docs
-title: '[Summarize what's being changed]'
+title: '[Summarize what has being changed]'
 labels: ''
 assignees: ''
 
