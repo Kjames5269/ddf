@@ -19,7 +19,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.only;
-import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -47,7 +46,11 @@ public class DavAlterationObserverTest {
 
   private DavResource mockChild1;
 
+  private DavResource mockChild1Changed;
+
   private DavResource mockChild3;
+
+  private DavResource mockChild3Changed;
 
   private Sardine mockSardine;
 
@@ -73,34 +76,27 @@ public class DavAlterationObserverTest {
     }
   }
 
+  private DavEntry child1;
+  private DavEntry child2;
+
   @Before
   public void setup() throws IOException {
     parent = new DavEntry("http://test");
-    DavEntry child1 = parent.newChildInstance("child1");
-    DavEntry child2 = parent.newChildInstance("child2");
+    child1 = parent.newChildInstance("child1");
+    child2 = parent.newChildInstance("child2");
 
     mockSardine = mock(Sardine.class);
     mockParent = mock(DavResource.class);
     mockChild1 = mock(DavResource.class);
     mockChild3 = mock(DavResource.class);
+    mockChild1Changed = mock(DavResource.class);
+    mockChild3Changed = mock(DavResource.class);
 
-    doReturn("/test").when(mockParent).getName();
-    doReturn(true).when(mockParent).isDirectory();
-    doReturn(new Date()).when(mockParent).getModified();
-    doReturn(0L).when(mockParent).getContentLength();
-    doReturn("E/0001").when(mockParent).getEtag();
-
-    doReturn("/child1").when(mockChild1).getName();
-    doReturn(false).when(mockChild1).isDirectory();
-    doReturn(new Date()).when(mockChild1).getModified();
-    doReturn(42L).when(mockChild1).getContentLength();
-    doReturn("E/0002").when(mockChild1).getEtag();
-
-    doReturn("/child3").when(mockChild3).getName();
-    doReturn(false).when(mockChild3).isDirectory();
-    doReturn(new Date()).when(mockChild3).getModified();
-    doReturn(43L).when(mockChild3).getContentLength();
-    doReturn("E/0003").when(mockChild3).getEtag();
+    initMock(mockParent, "/test", true, 0L, "E/0001");
+    initMock(mockChild1, "/child1", false, 42L, "E/0002");
+    initMock(mockChild3, "/child3", false, 43L, "E/0003");
+    initMock(mockChild1Changed, "/child1", false, 43L, "E/0003");
+    initMock(mockChild3Changed, "/child3", false, 43L, "E/0003");
 
     doReturn(Arrays.asList(mockParent, mockChild1, mockChild3))
         .when(mockSardine)
@@ -113,15 +109,18 @@ public class DavAlterationObserverTest {
     observer.initialize(mockSardine);
     observer.addListener(mockListener);
 
-    //  replaces old logic for initialization as a quick fix to see if tests work properly
-    init();
-    observer.checkAndNotify(mockSardine);
     init();
   }
 
-  private void init() {
-    reset(mockListener);
+  private void initMock(DavResource toMock, String name, boolean isDir, long length, String tag) {
+    doReturn(name).when(toMock).getName();
+    doReturn(isDir).when(toMock).isDirectory();
+    doReturn(new Date()).when(toMock).getModified();
+    doReturn(length).when(toMock).getContentLength();
+    doReturn(tag).when(toMock).getEtag();
+  }
 
+  private void init() {
     doAnswer(this::mockitoDoTest)
         .when(mockListener)
         .onFileCreate(any(), any(Synchronization.class));
@@ -171,11 +170,7 @@ public class DavAlterationObserverTest {
   public void testInsertedCreate() throws IOException {
     DavResource mockChild2 = mock(DavResource.class);
     DavEntry child2 = parent.newChildInstance("/child2");
-    doReturn("/child2").when(mockChild2).getName();
-    doReturn(false).when(mockChild2).isDirectory();
-    doReturn(new Date()).when(mockChild2).getModified();
-    doReturn(17L).when(mockChild2).getContentLength();
-    doReturn("E/0004").when(mockChild2).getEtag();
+    initMock(mockChild2, "/child2", false, 17, "E/0004");
     doReturn(Arrays.asList(mockParent, mockChild1, mockChild2, mockChild3))
         .when(mockSardine)
         .list(parent.getLocation());
@@ -189,11 +184,7 @@ public class DavAlterationObserverTest {
   public void testTrailingCreate() throws IOException {
     DavResource mockChild4 = mock(DavResource.class);
     DavEntry child4 = parent.newChildInstance("/child4");
-    doReturn("/child4").when(mockChild4).getName();
-    doReturn(false).when(mockChild4).isDirectory();
-    doReturn(new Date()).when(mockChild4).getModified();
-    doReturn(17L).when(mockChild4).getContentLength();
-    doReturn("E/0005").when(mockChild4).getEtag();
+    initMock(mockChild4, "/child4", false, 17L, "E/0005");
     doReturn(Arrays.asList(mockParent, mockChild1, mockChild4, mockChild3))
         .when(mockSardine)
         .list(parent.getLocation());
@@ -207,11 +198,7 @@ public class DavAlterationObserverTest {
   public void testLeadingCreate() throws IOException {
     DavResource mockChild0 = mock(DavResource.class);
     DavEntry child0 = parent.newChildInstance("/child0");
-    doReturn("/child0").when(mockChild0).getName();
-    doReturn(false).when(mockChild0).isDirectory();
-    doReturn(new Date()).when(mockChild0).getModified();
-    doReturn(12345L).when(mockChild0).getContentLength();
-    doReturn("E/0011").when(mockChild0).getEtag();
+    initMock(mockChild0, "/child0", false, 12345L, "E/0011");
     doReturn(Arrays.asList(mockParent, mockChild1, mockChild0, mockChild3))
         .when(mockSardine)
         .list(parent.getLocation());
@@ -222,16 +209,30 @@ public class DavAlterationObserverTest {
   }
 
   @Test
-  public void testModify() {
-    doReturn("E/00006").when(mockChild1).getEtag();
+  public void testModify() throws IOException {
+    doReturn(Arrays.asList(mockParent, mockChild1Changed, mockChild3))
+        .when(mockSardine)
+        .list(parent.getLocation());
+    doReturn(Collections.singletonList(mockChild1Changed))
+        .when(mockSardine)
+        .list(child1.getLocation());
+    doReturn("E/00006").when(mockChild1Changed).getEtag();
+
     observer.checkAndNotify(mockSardine);
     verify(mockListener, only()).onFileChange(any(), any());
   }
 
   @Test
-  public void testModifyWithFailure() {
+  public void testModifyWithFailure() throws IOException {
     timesToFail.set(1);
-    doReturn("E/00006").when(mockChild1).getEtag();
+    doReturn(Arrays.asList(mockParent, mockChild1Changed, mockChild3))
+        .when(mockSardine)
+        .list(parent.getLocation());
+    doReturn(Collections.singletonList(mockChild1Changed))
+        .when(mockSardine)
+        .list(child1.getLocation());
+    doReturn("E/00006").when(mockChild1Changed).getEtag();
+
     observer.checkAndNotify(mockSardine);
     verify(mockListener, times(failures)).onFileChange(any(), any());
     observer.checkAndNotify(mockSardine);
@@ -279,11 +280,10 @@ public class DavAlterationObserverTest {
   public void testDirectory() throws IOException {
     DavEntry dir = parent.newChildInstance("dir");
     DavResource mockDir = mock(DavResource.class);
-    doReturn("/dir").when(mockDir).getName();
-    doReturn(true).when(mockDir).isDirectory();
-    doReturn(new Date()).when(mockDir).getModified();
-    doReturn(0L).when(mockDir).getContentLength();
-    doReturn("E/0008").when(mockDir).getEtag();
+    initMock(mockDir, "/dir", true, 0L, "E/0008");
+
+    DavResource mockDirChanged = mock(DavResource.class);
+    initMock(mockDirChanged, "/dir", true, 0L, "E/0009");
 
     doReturn(Arrays.asList(mockParent, mockChild1, mockChild3, mockDir))
         .when(mockSardine)
@@ -291,7 +291,11 @@ public class DavAlterationObserverTest {
     observer.checkAndNotify(mockSardine);
     verify(mockListener, times(1)).onDirectoryCreate(any(), any());
 
-    doReturn("E/0009").when(mockDir).getEtag();
+    doReturn(Arrays.asList(mockParent, mockChild1, mockChild3, mockDirChanged))
+        .when(mockSardine)
+        .list(parent.getLocation());
+    doReturn(Collections.singletonList(mockDirChanged)).when(mockSardine).list(dir.getLocation());
+
     observer.checkAndNotify(mockSardine);
     verify(mockListener, times(1)).onDirectoryChange(any(), any());
 

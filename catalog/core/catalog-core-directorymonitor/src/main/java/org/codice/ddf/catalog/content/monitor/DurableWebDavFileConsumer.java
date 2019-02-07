@@ -74,8 +74,7 @@ public class DurableWebDavFileConsumer extends AbstractDurableFileConsumer {
       observer.addListener(listener);
       observer.checkAndNotify(sardine);
       observer.removeListener(listener);
-      String sha1 = DigestUtils.sha1Hex(remaining);
-      fileSystemPersistenceProvider.store(sha1, observer);
+      jsonSerializer.store(remaining, observer);
       return true;
     } else {
       return isMatched(null, null, null);
@@ -88,13 +87,44 @@ public class DurableWebDavFileConsumer extends AbstractDurableFileConsumer {
       fileSystemPersistenceProvider = new FileSystemPersistenceProvider(getClass().getSimpleName());
     }
     if (observer == null && fileName != null) {
-      String sha1 = DigestUtils.sha1Hex(fileName);
-      if (fileSystemPersistenceProvider.loadAllKeys().contains(sha1)) {
-        observer = (DavAlterationObserver) fileSystemPersistenceProvider.loadFromPersistence(sha1);
+
+      observer = (DavAlterationObserver) jsonSerializer.load(fileName, DavAlterationObserver.class);
+
+      if (observer != null) {
+        observer.onLoad();
+      } else if (isOldVersion(fileName)) {
+        observer = backwardsCompatibility(fileName);
       } else {
         observer = new DavAlterationObserver(new DavEntry(fileName));
       }
     }
+  }
+
+  private boolean isOldVersion(String fileName) {
+    String sha1 = DigestUtils.sha1Hex(fileName);
+    return fileSystemPersistenceProvider.loadAllKeys().contains(sha1);
+  }
+
+  private DavAlterationObserver backwardsCompatibility(String fileName) {
+
+    String sha1 = DigestUtils.sha1Hex(fileName);
+    DavAlterationObserver newObserver = new DavAlterationObserver(new DavEntry(fileName));
+
+    //  Will this even work since this needs to be the 'old' version???
+    DavAlterationObserver oldObserver =
+        (DavAlterationObserver) fileSystemPersistenceProvider.loadFromPersistence(sha1);
+
+    boolean success = newObserver.initialize(sardine);
+    if (!success) {
+      //  There was an IO error setting up the initial state of the observer
+      LOGGER.info("Error initializing the new state of the CDM. retrying on next poll");
+      return null;
+    }
+    oldObserver.addListener(listener);
+    oldObserver.checkAndNotify(sardine);
+    oldObserver.removeListener(listener);
+
+    return newObserver;
   }
 
   @Override

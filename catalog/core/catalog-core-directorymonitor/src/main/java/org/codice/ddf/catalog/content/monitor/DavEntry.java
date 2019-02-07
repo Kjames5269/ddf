@@ -53,7 +53,7 @@ public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<
 
   private static final String FORSLASH = "/";
 
-  private @Nullable final DavEntry parent;
+  private @Nullable transient DavEntry parent;
 
   private ConcurrentSkipListSet<DavEntry> children = new ConcurrentSkipListSet<>();
 
@@ -252,7 +252,7 @@ public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<
   }
 
   private long snapGetLength() {
-    return snapIsExists() && !snapIsDirectory() ? lastDav.getContentLength() : 0;
+    return snapIsExists() && !snapIsDirectory() ? lastDavSnapshot.getContentLength() : 0;
   }
 
   /**
@@ -340,5 +340,28 @@ public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<
         || isDirectory() != snapIsDirectory() //
         || getLength() != snapGetLength() //
         || !Objects.equals(getETag(), snapGetETag());
+  }
+
+  //  Serializing to JSON doesn't allow infinite loops. Thus we
+  //  Make the parent null and allow users to re-initialize after loading
+  //  from a json.
+  private void setParent(@Nullable DavEntry parentalUnit) {
+    parent = parentalUnit;
+  }
+
+  private void initializeHelper(DavEntry toInit) {
+    for (DavEntry child : toInit.getChildren()) {
+      child.setParent(toInit);
+      initializeHelper(child);
+    }
+  }
+
+  /**
+   * Must be called when a {@link DavEntry} is loaded from a json file.
+   *
+   * @throws IllegalStateException if a {@link File} is null
+   */
+  public void initialize() {
+    initializeHelper(this);
   }
 }

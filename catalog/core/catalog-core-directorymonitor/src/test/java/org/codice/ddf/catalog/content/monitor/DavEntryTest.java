@@ -41,47 +41,57 @@ public class DavEntryTest {
 
   private DavResource mockResource;
 
+  private DavResource changedResource;
+
   private Sardine mockSardine;
 
   @Before
   public void setup() {
     entry = new DavEntry("http://test");
     mockResource = mock(DavResource.class);
-    doReturn(false).when(mockResource).isDirectory();
-    doReturn(new Date()).when(mockResource).getModified();
-    doReturn("E/12345").when(mockResource).getEtag();
-    doReturn(42L).when(mockResource).getContentLength();
+    changedResource = mock(DavResource.class);
+    initDavMock(mockResource);
+    initDavMock(changedResource);
     entry.refresh(mockResource);
     mockSardine = mock(Sardine.class);
   }
 
+  private void initDavMock(DavResource initMock) {
+    doReturn(false).when(initMock).isDirectory();
+    doReturn(new Date()).when(initMock).getModified();
+    doReturn("E/12345").when(initMock).getEtag();
+    doReturn(42L).when(initMock).getContentLength();
+  }
+
   @Test
   public void testIdempotency() {
-    assertThat(entry.refresh(mockResource), is(false));
+    assertThat(entry.hasChanged(mockResource), is(false));
   }
 
   @Test
   public void testModified() {
-    doReturn(new Date(mockResource.getModified().getTime() + 1)).when(mockResource).getModified();
-    assertThat(entry.refresh(mockResource), is(true));
+    doReturn(new Date(changedResource.getModified().getTime() + 1))
+        .when(changedResource)
+        .getModified();
+    assertThat(entry.hasChanged(changedResource), is(true));
   }
 
   @Test
   public void testEtag() {
-    doReturn("E/67890").when(mockResource).getEtag();
-    assertThat(entry.refresh(mockResource), is(true));
+    doReturn("E/67890").when(changedResource).getEtag();
+    assertThat(entry.hasChanged(changedResource), is(true));
   }
 
   @Test
   public void testContentLength() {
-    doReturn(24L).when(mockResource).getContentLength();
-    assertThat(entry.refresh(mockResource), is(true));
+    doReturn(24L).when(changedResource).getContentLength();
+    assertThat(entry.hasChanged(changedResource), is(true));
   }
 
   @Test
   public void testDirectory() {
-    doReturn(true).when(mockResource).isDirectory();
-    assertThat(entry.refresh(mockResource), is(true));
+    doReturn(true).when(changedResource).isDirectory();
+    assertThat(entry.hasChanged(changedResource), is(true));
   }
 
   @Test

@@ -93,8 +93,19 @@ public class DavAlterationObserver implements Serializable {
    *
    * @param sardine
    */
-  public void initialize(Sardine sardine) {
+  public boolean initialize(Sardine sardine) {
     this.sardine = sardine;
+    try {
+      DavResource davResource = sardine.list(rootEntry.getLocation()).get(0);
+      rootEntry.refresh(davResource);
+      final DavEntry[] children = doListFiles(rootEntry.getLocation(), rootEntry);
+      for (DavEntry child : children) rootEntry.addChild(child);
+    } catch (IOException e) {
+      // probably means root location was inaccessible
+      LOGGER.debug("Failed to initalize against remote {}", rootEntry.getLocation(), e);
+      return false;
+    }
+    return true;
   }
 
   /** Check whether the file and its children have been created, modified or deleted. */
@@ -352,5 +363,9 @@ public class DavAlterationObserver implements Serializable {
 
   private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
+  }
+
+  public void onLoad() {
+    rootEntry.initialize();
   }
 }
