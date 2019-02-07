@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentSkipListSet;
+import javax.annotation.Nullable;
 import javax.validation.constraints.NotNull;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
@@ -52,23 +53,17 @@ public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<
 
   private static final String FORSLASH = "/";
 
-  private final DavEntry parent;
+  private @Nullable final DavEntry parent;
 
   private ConcurrentSkipListSet<DavEntry> children = new ConcurrentSkipListSet<>();
+
+  private @Nullable DavResource lastDavSnapshot = null;
+
+  private @Nullable DavResource lastDav = null;
 
   private File file;
 
   private String location;
-
-  private boolean exists;
-
-  private boolean directory;
-
-  private long lastModified;
-
-  private long length;
-
-  private String eTag;
 
   /** @param location must be fully qualified */
   DavEntry(final String location) {
@@ -87,35 +82,10 @@ public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<
     return EMPTY_ENTRIES;
   }
 
-  public boolean refresh(DavResource davResource) {
+  public void refresh(DavResource davResource) {
 
     lastDav = davResource;
-
-    // cache original values
-    final boolean origExists = isExists();
-    final long origLastModified = getLastModified();
-    final boolean origDirectory = isDirectory();
-    final long origLength = getLength();
-    final String origEtag = getETag();
-
-    // refresh the values
-    exists = davResource != null;
-    directory = isExists() && davResource.isDirectory();
-    lastModified =
-        isExists() && davResource.getModified() != null ? davResource.getModified().getTime() : 0;
-    length = isExists() && !isDirectory() ? davResource.getContentLength() : 0;
-    eTag = isExists() ? davResource.getEtag() : "0";
-
-    if (file != null && !isDirectory() && origLastModified != getLastModified()) {
-      deleteCacheIfExists();
-    }
-
-    // Return if there are changes
-    return isExists() != origExists //
-        || getLastModified() != origLastModified //
-        || isDirectory() != origDirectory //
-        || getLength() != origLength //
-        || !Objects.equals(getETag(), origEtag);
+    lastDavSnapshot = lastDav;
   }
 
   DavEntry newChildInstance(String location) {
@@ -263,7 +233,13 @@ public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<
    * @return the last modified time
    */
   public long getLastModified() {
-    return lastModified;
+    return isExists() && lastDav.getModified() != null ? lastDav.getModified().getTime() : 0;
+  }
+
+  private long snapGetLastModified() {
+    return snapIsExists() && lastDavSnapshot.getModified() != null
+        ? lastDavSnapshot.getModified().getTime()
+        : 0;
   }
 
   /**
@@ -272,7 +248,11 @@ public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<
    * @return the length
    */
   public long getLength() {
-    return length;
+    return isExists() && !isDirectory() ? lastDav.getContentLength() : 0;
+  }
+
+  private long snapGetLength() {
+    return snapIsExists() && !snapIsDirectory() ? lastDav.getContentLength() : 0;
   }
 
   /**
@@ -281,7 +261,11 @@ public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<
    * @return whether the file existed
    */
   public boolean isExists() {
-    return exists;
+    return lastDav != null;
+  }
+
+  private boolean snapIsExists() {
+    return lastDavSnapshot != null;
   }
 
   /**
@@ -290,7 +274,11 @@ public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<
    * @return whether the file is a directory or not
    */
   public boolean isDirectory() {
-    return directory;
+    return isExists() && lastDav.isDirectory();
+  }
+
+  private boolean snapIsDirectory() {
+    return snapIsExists() && lastDavSnapshot.isDirectory();
   }
 
   /**
@@ -313,15 +301,15 @@ public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<
   }
 
   public String getETag() {
-    return eTag;
+    return isExists() ? lastDav.getEtag() : "0";
+  }
+
+  private String snapGetETag() {
+    return snapIsExists() ? lastDavSnapshot.getEtag() : "0";
   }
 
   void setFile(File file) {
     this.file = file;
-  }
-
-  void setETag(String eTag) {
-    this.eTag = eTag;
   }
 
   @Override
@@ -339,28 +327,18 @@ public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<
   }
 
   public void commit() {
-    refresh(lastDav);
+    refresh(lastDavSnapshot);
   }
-
-  private DavResource lastDav = null;
 
   public boolean hasChanged(DavResource davResource) {
 
-    lastDav = davResource;
-
-    // cache original values
-    final boolean snapExist = davResource != null;
-    final boolean snapDirectory = snapExist && davResource.isDirectory();
-    final long snapLastModified =
-        snapExist && davResource.getModified() != null ? davResource.getModified().getTime() : 0;
-    final long snapLength = snapExist && !isDirectory() ? davResource.getContentLength() : 0;
-    final String snapETag = snapExist ? davResource.getEtag() : "0";
+    lastDavSnapshot = davResource;
 
     // Return if there are changes
-    return isExists() != snapExist //
-        || getLastModified() != snapLastModified //
-        || isDirectory() != snapDirectory //
-        || getLength() != snapLength //
-        || !Objects.equals(getETag(), snapETag);
+    return isExists() != snapIsExists() //
+        || getLastModified() != snapGetLastModified() //
+        || isDirectory() != snapIsDirectory() //
+        || getLength() != snapGetLength() //
+        || !Objects.equals(getETag(), snapGetETag());
   }
 }
