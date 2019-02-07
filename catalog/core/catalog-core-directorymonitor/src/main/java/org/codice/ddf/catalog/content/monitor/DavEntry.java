@@ -28,7 +28,12 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentSkipListSet;
+import javax.validation.constraints.NotNull;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
@@ -37,7 +42,7 @@ import org.apache.commons.io.IOUtils;
  * A webdav implementation of the {@link org.apache.commons.io.monitor.FileEntry} Uses
  * https://github.com/lookfirst/sardine
  */
-public class DavEntry implements Serializable {
+public class DavEntry implements Serializable, Comparable<DavEntry>, AsyncEntry<DavEntry> {
 
   private static final long serialVersionUID = -2505664948818681153L;
 
@@ -49,7 +54,7 @@ public class DavEntry implements Serializable {
 
   private final DavEntry parent;
 
-  private DavEntry[] children;
+  private ConcurrentSkipListSet<DavEntry> children = new ConcurrentSkipListSet<>();
 
   private File file;
 
@@ -75,14 +80,16 @@ public class DavEntry implements Serializable {
       throw new IllegalArgumentException("File is missing");
     }
     this.parent = parent;
-    this.setLocation(getLocation(location, parent));
+    this.location = getLocation(location, Optional.ofNullable(parent));
   }
 
   static DavEntry[] getEmptyEntries() {
     return EMPTY_ENTRIES;
   }
 
-  boolean refresh(DavResource davResource) {
+  public boolean refresh(DavResource davResource) {
+
+    lastDav = davResource;
 
     // cache original values
     final boolean origExists = isExists();
@@ -92,12 +99,12 @@ public class DavEntry implements Serializable {
     final String origEtag = getETag();
 
     // refresh the values
-    setExists(davResource != null);
-    setDirectory(isExists() && davResource.isDirectory());
-    setLastModified(
-        isExists() && davResource.getModified() != null ? davResource.getModified().getTime() : 0);
-    setLength(isExists() && !isDirectory() ? davResource.getContentLength() : 0);
-    setETag(isExists() ? davResource.getEtag() : "0");
+    exists = davResource != null;
+    directory = isExists() && davResource.isDirectory();
+    lastModified =
+        isExists() && davResource.getModified() != null ? davResource.getModified().getTime() : 0;
+    length = isExists() && !isDirectory() ? davResource.getContentLength() : 0;
+    eTag = isExists() ? davResource.getEtag() : "0";
 
     if (file != null && !isDirectory() && origLastModified != getLastModified()) {
       deleteCacheIfExists();
@@ -117,10 +124,10 @@ public class DavEntry implements Serializable {
 
   // construct the fully qualified location from a fully qualified parent and
   // a child relative to the parent
-  static String getLocation(String initialLocation, DavEntry parent) {
+  static String getLocation(String initialLocation, Optional<DavEntry> parent) {
     String location = initialLocation;
-    if (parent != null && !location.startsWith(HTTP)) {
-      String parentLocation = parent.getLocation();
+    if (parent.isPresent() && !location.startsWith(HTTP)) {
+      String parentLocation = parent.get().getLocation();
       if (parentLocation.endsWith(FORSLASH) && location.startsWith(FORSLASH)) {
         location = location.replaceFirst(FORSLASH, "");
       }
@@ -155,8 +162,8 @@ public class DavEntry implements Serializable {
    *
    * @return the parent entry
    */
-  public DavEntry getParent() {
-    return parent;
+  public Optional<DavEntry> getParent() {
+    return Optional.ofNullable(parent);
   }
 
   /**
@@ -165,7 +172,7 @@ public class DavEntry implements Serializable {
    * @return the level
    */
   int getLevel() {
-    return getParent() == null ? 0 : getParent().getLevel() + 1;
+    return getParent().isPresent() ? getParent().get().getLevel() + 1 : 0;
   }
 
   /**
@@ -174,17 +181,40 @@ public class DavEntry implements Serializable {
    * @return This directory's files or an empty array if the file is not a directory or the
    *     directory is empty
    */
-  DavEntry[] getChildren() {
-    return children != null ? children : getEmptyEntries();
+  public List<DavEntry> getChildren() {
+    return new ArrayList<>(children);
   }
 
   /**
    * Set the directory's files.
    *
-   * @param children This directory's files, may be null
+   * @param child a file contained by the directory
    */
-  void setChildren(final DavEntry... children) {
-    this.children = children;
+  public void addChild(@NotNull final DavEntry child) {
+    children.add(child);
+  }
+
+  public void removeChild(@NotNull final DavEntry child) {
+    children.remove(child);
+  }
+
+  /**
+   * gets the {@link AsyncFileEntry} from the parent if it exists.
+   *
+   * @return the entry from the parent or null.
+   */
+  public DavEntry getFromParent() {
+    if (parent != null) {
+      if (parent.hasChild(this)) {
+        List<DavEntry> children = parent.getChildren();
+        return children.get(children.indexOf(this));
+      }
+    }
+    return null;
+  }
+
+  private boolean hasChild(DavEntry davEntry) {
+    return children.contains(davEntry);
   }
 
   /**
@@ -237,30 +267,12 @@ public class DavEntry implements Serializable {
   }
 
   /**
-   * Return the last modified time from the last time it was checked.
-   *
-   * @param lastModified The last modified time
-   */
-  public void setLastModified(final long lastModified) {
-    this.lastModified = lastModified;
-  }
-
-  /**
    * Return the length.
    *
    * @return the length
    */
   public long getLength() {
     return length;
-  }
-
-  /**
-   * Set the length.
-   *
-   * @param length the length
-   */
-  public void setLength(final long length) {
-    this.length = length;
   }
 
   /**
@@ -273,30 +285,12 @@ public class DavEntry implements Serializable {
   }
 
   /**
-   * Set whether the file existed the last time it was checked.
-   *
-   * @param exists whether the file exists or not
-   */
-  public void setExists(final boolean exists) {
-    this.exists = exists;
-  }
-
-  /**
    * Indicate whether the file is a directory or not.
    *
    * @return whether the file is a directory or not
    */
   public boolean isDirectory() {
     return directory;
-  }
-
-  /**
-   * Set whether the file is a directory or not.
-   *
-   * @param directory whether the file is a directory or not
-   */
-  public void setDirectory(final boolean directory) {
-    this.directory = directory;
   }
 
   /**
@@ -328,5 +322,45 @@ public class DavEntry implements Serializable {
 
   void setETag(String eTag) {
     this.eTag = eTag;
+  }
+
+  @Override
+  public String getName() {
+    return location;
+  }
+
+  @Override
+  public boolean checkNetwork() {
+    return false;
+  }
+
+  public int compareTo(@NotNull DavEntry o) {
+    return location.compareTo(o.getName());
+  }
+
+  public void commit() {
+    refresh(lastDav);
+  }
+
+  private DavResource lastDav = null;
+
+  public boolean hasChanged(DavResource davResource) {
+
+    lastDav = davResource;
+
+    // cache original values
+    final boolean snapExist = davResource != null;
+    final boolean snapDirectory = snapExist && davResource.isDirectory();
+    final long snapLastModified =
+        snapExist && davResource.getModified() != null ? davResource.getModified().getTime() : 0;
+    final long snapLength = snapExist && !isDirectory() ? davResource.getContentLength() : 0;
+    final String snapETag = snapExist ? davResource.getEtag() : "0";
+
+    // Return if there are changes
+    return isExists() != snapExist //
+        || getLastModified() != snapLastModified //
+        || isDirectory() != snapDirectory //
+        || getLength() != snapLength //
+        || !Objects.equals(getETag(), snapETag);
   }
 }

@@ -18,39 +18,38 @@ import java.security.PrivilegedAction;
 import java.util.function.BiConsumer;
 import org.apache.camel.Exchange;
 import org.apache.camel.spi.Synchronization;
-import org.codice.ddf.catalog.content.monitor.AsyncFileEntry;
+import org.codice.ddf.catalog.content.monitor.AsyncEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CompletionSynchronization implements Synchronization {
+public class CompletionSynchronization<T extends AsyncEntry> implements Synchronization {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(CompletionSynchronization.class);
 
-  private final AsyncFileEntry asyncFileEntry;
+  private final T asyncEntry;
 
-  private final BiConsumer<AsyncFileEntry, Boolean> callback;
+  private final BiConsumer<T, Boolean> callback;
 
-  public CompletionSynchronization(
-      AsyncFileEntry entry, BiConsumer<AsyncFileEntry, Boolean> removeFromProcessors) {
-    asyncFileEntry = entry;
+  public CompletionSynchronization(T entry, BiConsumer<T, Boolean> removeFromProcessors) {
+    asyncEntry = entry;
     callback = removeFromProcessors;
   }
 
   @Override
   public void onComplete(Exchange exchange) {
-    callback.accept(asyncFileEntry, true);
+    callback.accept(asyncEntry, true);
   }
 
   @Override
   public void onFailure(Exchange exchange) {
     boolean connected =
-        AccessController.doPrivileged((PrivilegedAction<Boolean>) asyncFileEntry::checkNetwork);
+        AccessController.doPrivileged((PrivilegedAction<Boolean>) asyncEntry::checkNetwork);
 
     if (!connected) {
       LOGGER.debug(
-          "a network error occurred, The file [{}] failed to process", asyncFileEntry.getName());
+          "a network error occurred, The file [{}] failed to process", asyncEntry.getName());
     }
 
-    callback.accept(asyncFileEntry, false);
+    callback.accept(asyncEntry, false);
   }
 }

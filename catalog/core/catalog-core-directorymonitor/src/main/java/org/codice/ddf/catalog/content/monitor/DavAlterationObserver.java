@@ -18,8 +18,9 @@ import com.github.sardine.Sardine;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.concurrent.ConcurrentSkipListSet;
+import org.codice.ddf.catalog.content.monitor.synchronizations.CompletionSynchronization;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,9 +39,11 @@ public class DavAlterationObserver implements Serializable {
   private static final transient Logger LOGGER =
       LoggerFactory.getLogger(DavAlterationObserver.class);
 
-  private transient LinkedHashSet<EntryAlterationListener> listeners = new LinkedHashSet<>();
-
   private transient Sardine sardine;
+
+  private transient ConcurrentSkipListSet<DavEntry> processing = new ConcurrentSkipListSet<>();
+
+  private EntryAlterationListener listener;
 
   DavAlterationObserver(final DavEntry rootEntry) {
     if (rootEntry == null) {
@@ -58,14 +61,16 @@ public class DavAlterationObserver implements Serializable {
     return rootEntry.getLocation();
   }
 
+  private final Object listenerLock = new Object();
+
   /**
    * Add a file system listener.
    *
    * @param listener The file system listener
    */
   void addListener(final EntryAlterationListener listener) {
-    if (listener != null) {
-      listeners.add(listener);
+    synchronized (listenerLock) {
+      this.listener = listener;
     }
   }
 
@@ -75,18 +80,11 @@ public class DavAlterationObserver implements Serializable {
    * @param listener The file system listener
    */
   void removeListener(final EntryAlterationListener listener) {
-    if (listener != null) {
-      listeners.remove(listener);
+    synchronized (listenerLock) {
+      if (listener != null) {
+        this.listener = null;
+      }
     }
-  }
-
-  /**
-   * Returns the set of registered file system listeners.
-   *
-   * @return The file system listeners
-   */
-  public Iterable<EntryAlterationListener> getListeners() {
-    return listeners;
   }
 
   /**
@@ -97,28 +95,21 @@ public class DavAlterationObserver implements Serializable {
    */
   public void initialize(Sardine sardine) {
     this.sardine = sardine;
-    try {
-      DavResource davResource = sardine.list(rootEntry.getLocation()).get(0);
-      rootEntry.refresh(davResource);
-      final DavEntry[] children = doListFiles(rootEntry.getLocation(), rootEntry);
-      rootEntry.setChildren(children);
-    } catch (IOException e) {
-      // probably means root location was inaccessible
-      LOGGER.debug("Failed to initalize against remote {}", rootEntry.getLocation(), e);
-    }
   }
 
   /** Check whether the file and its children have been created, modified or deleted. */
   void checkAndNotify(Sardine sardine) {
-    this.sardine = sardine;
-    if (rootEntry.remoteExists(sardine)) {
-      checkAndNotify(rootEntry, rootEntry.getChildren(), listFiles(rootEntry.getLocation()));
-    } else if (rootEntry.isExists()) {
-      // would remove all metacards if connectivity is lost, but tough to distinguish
-      // from the hierarchy not existing remotely
-      checkAndNotify(rootEntry, rootEntry.getChildren(), EMPTY_RESOURCES);
-    } else {
-      // Didn't exist and still doesn't
+    synchronized (listenerLock) {
+      if (listener == null) {
+        return;
+      }
+
+      this.sardine = sardine;
+      if (rootEntry.remoteExists(sardine)) {
+        checkAndNotify(rootEntry, rootEntry.getChildren(), listFiles(rootEntry.getLocation()));
+      } else {
+        // doesn't exist remotely but we're assuming network disconnects
+      }
     }
   }
 
@@ -138,7 +129,7 @@ public class DavAlterationObserver implements Serializable {
    * @param incoming The current list of files
    */
   private void checkAndNotify(
-      final DavEntry parent, final DavEntry[] previous, final DavResource[] incoming) {
+      final DavEntry parent, final List<DavEntry> previous, final DavResource[] incoming) {
     int c = 0;
     final DavEntry[] current =
         incoming.length > 0 ? new DavEntry[incoming.length] : DavEntry.getEmptyEntries();
@@ -176,7 +167,6 @@ public class DavAlterationObserver implements Serializable {
       current[c] = createFileEntry(parent, incoming[c]);
       doCreate(current[c]);
     }
-    parent.setChildren(current);
   }
 
   /**
@@ -189,8 +179,6 @@ public class DavAlterationObserver implements Serializable {
   private DavEntry createFileEntry(final DavEntry parent, final DavResource file) {
     final DavEntry entry = parent.newChildInstance(file.getName());
     entry.refresh(file);
-    final DavEntry[] children = doListFiles(entry.getLocation(), entry);
-    entry.setChildren(children);
     return entry;
   }
 
@@ -217,17 +205,39 @@ public class DavAlterationObserver implements Serializable {
    * @param entry The file entry
    */
   private void doCreate(final DavEntry entry) {
-    for (final EntryAlterationListener listener : listeners) {
-      if (entry.isDirectory()) {
-        listener.onDirectoryCreate(entry);
-      } else {
-        listener.onFileCreate(entry);
+
+    if (!processing.add(entry)) {
+      return;
+    }
+
+    DavEntry temp = entry.getFromParent();
+
+    if (temp != null) {
+      processing.remove(entry);
+      return;
+    }
+
+    if (entry.isDirectory()) {
+      listener.onDirectoryCreate(entry, new CompletionSynchronization<>(entry, this::doNothing));
+      final DavResource[] children = listFiles(entry.getLocation());
+      for (final DavResource aChild : children) {
+        doCreate(createFileEntry(entry, aChild));
       }
+
+      commitCreate(entry, true);
+
+    } else {
+      listener.onFileCreate(entry, new CompletionSynchronization<>(entry, this::commitCreate));
     }
-    final DavEntry[] children = entry.getChildren();
-    for (final DavEntry aChildren : children) {
-      doCreate(aChildren);
+  }
+
+  private void commitCreate(final DavEntry entry, boolean success) {
+    LOGGER.debug("commitCreate({},{}): Starting...", entry.getName(), success);
+    if (success) {
+      entry.commit();
+      entry.getParent().ifPresent(e -> e.addChild(entry));
     }
+    processing.remove(entry);
   }
 
   /**
@@ -237,15 +247,31 @@ public class DavAlterationObserver implements Serializable {
    * @param file The current file
    */
   private void doMatch(final DavEntry entry, final DavResource file) {
-    if (entry.refresh(file)) {
-      for (final EntryAlterationListener listener : listeners) {
-        if (entry.isDirectory()) {
-          listener.onDirectoryChange(entry);
-        } else {
-          listener.onFileChange(entry);
-        }
+    if (entry.hasChanged(file)) {
+
+      if (!processing.add(entry)) {
+        return;
+      }
+      if (!entry.hasChanged(file)) {
+        //  Another thread must have beat us here as we're no longer changed.
+        processing.remove(entry);
+        return;
+      }
+
+      if (entry.isDirectory()) {
+        listener.onDirectoryChange(entry, new CompletionSynchronization<>(entry, this::doNothing));
+      } else {
+        listener.onFileChange(entry, new CompletionSynchronization<>(entry, this::commitMatch));
       }
     }
+  }
+
+  private void commitMatch(final DavEntry entry, boolean success) {
+    LOGGER.debug("commitMatch({},{}): Starting...", entry.getName(), success);
+    if (success) {
+      entry.commit();
+    }
+    processing.remove(entry);
   }
 
   /**
@@ -254,13 +280,34 @@ public class DavAlterationObserver implements Serializable {
    * @param entry The file entry
    */
   private void doDelete(final DavEntry entry) {
-    for (final EntryAlterationListener listener : listeners) {
-      if (entry.isDirectory()) {
-        listener.onDirectoryDelete(entry);
-      } else {
-        listener.onFileDelete(entry);
-      }
+
+    if (!processing.add(entry)) {
+      return;
     }
+    if (entry.getFromParent() == null) {
+      //  If we don't exist in the parent another thread beat us here.
+      processing.remove(entry);
+      return;
+    }
+
+    if (entry.isDirectory()) {
+      listener.onDirectoryDelete(entry, new CompletionSynchronization<>(entry, this::doNothing));
+    } else {
+      listener.onFileDelete(entry, new CompletionSynchronization<>(entry, this::commitDelete));
+    }
+  }
+
+  private void commitDelete(final DavEntry entry, boolean success) {
+    LOGGER.debug("commitDelete({},{}): Starting...", entry.getName(), success);
+    if (success) {
+      entry.getParent().ifPresent(e -> e.removeChild(entry));
+      entry.commit();
+    }
+    processing.remove(entry);
+  }
+
+  private void doNothing(DavEntry davEntry, Boolean aBoolean) {
+    processing.remove(davEntry);
   }
 
   /**
@@ -279,7 +326,7 @@ public class DavAlterationObserver implements Serializable {
         List<DavResource> resourceList = list.subList(1, list.size());
         // lexicographical sorting
         resourceList.sort(Comparator.comparing(DavResource::getName));
-        children = resourceList.toArray(new DavResource[resourceList.size()]);
+        children = resourceList.toArray(new DavResource[0]);
       }
     } catch (IOException e) {
       // if it doesn't exist it can't have children
@@ -300,11 +347,10 @@ public class DavAlterationObserver implements Serializable {
   public String toString() {
     return String.format(
         "%s[file='%s', listeners=%d]",
-        getClass().getSimpleName(), getDirectory(), listeners.size());
+        getClass().getSimpleName(), getDirectory(), (listener == null) ? 0 : 1);
   }
 
   private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
     in.defaultReadObject();
-    listeners = new LinkedHashSet<>();
   }
 }

@@ -23,8 +23,11 @@ import com.github.sardine.DavResource;
 import com.github.sardine.Sardine;
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.List;
+import java.util.Optional;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.junit.Before;
@@ -83,14 +86,14 @@ public class DavEntryTest {
 
   @Test
   public void testChild() {
-    assertThat(entry.getChildren(), is(DavEntry.getEmptyEntries()));
+    assertThat(entry.getChildren(), is(Arrays.asList(DavEntry.getEmptyEntries())));
     DavEntry child = entry.newChildInstance("foo");
-    entry.setChildren(child);
-    DavEntry[] children = entry.getChildren();
-    assertThat(children.length, is(1));
-    assertThat(children[0], is(child));
+    entry.addChild(child);
+    List<DavEntry> children = entry.getChildren();
+    assertThat(children.size(), is(1));
+    assertThat(children.get(0), is(child));
     assertThat(child.getLocation(), is("http://test/foo"));
-    assertThat(child.getParent(), is(entry));
+    assertThat(child.getParent().get(), is(entry));
     assertThat(entry.getLevel(), is(0));
     assertThat(child.getLevel(), is(1));
   }
@@ -106,7 +109,7 @@ public class DavEntryTest {
     for (String parent : new String[] {"http://test", "http://test/"}) {
       entry.setLocation(parent);
       for (String child : new String[] {"http://test/foo", "/foo", "foo"}) {
-        assertThat(DavEntry.getLocation(child, entry), is("http://test/foo"));
+        assertThat(DavEntry.getLocation(child, Optional.of(entry)), is("http://test/foo"));
       }
     }
   }

@@ -14,10 +14,12 @@
 package org.codice.ddf.catalog.content.monitor;
 
 import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.only;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -28,10 +30,14 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import org.apache.camel.spi.Synchronization;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.invocation.InvocationOnMock;
 
 @RunWith(JUnit4.class)
 public class DavAlterationObserverTest {
@@ -48,6 +54,24 @@ public class DavAlterationObserverTest {
   private DavAlterationObserver observer;
 
   private EntryAlterationListener mockListener;
+
+  private Consumer<Runnable> doTestWrapper = Runnable::run;
+
+  private final AtomicInteger timesToFail = new AtomicInteger(0);
+
+  private int failures = 0;
+
+  private void doTest(Synchronization cb) {
+    synchronized (timesToFail) {
+      if (timesToFail.intValue() != 0) {
+        timesToFail.decrementAndGet();
+        failures++;
+        cb.onFailure(null);
+      } else {
+        cb.onComplete(null);
+      }
+    }
+  }
 
   @Before
   public void setup() throws IOException {
@@ -88,6 +112,48 @@ public class DavAlterationObserverTest {
     mockListener = mock(EntryAlterationListener.class);
     observer.initialize(mockSardine);
     observer.addListener(mockListener);
+
+    //  replaces old logic for initialization as a quick fix to see if tests work properly
+    init();
+    observer.checkAndNotify(mockSardine);
+    init();
+  }
+
+  private void init() {
+    reset(mockListener);
+
+    doAnswer(this::mockitoDoTest)
+        .when(mockListener)
+        .onFileCreate(any(), any(Synchronization.class));
+
+    doAnswer(this::mockitoDoTest)
+        .when(mockListener)
+        .onFileChange(any(), any(Synchronization.class));
+
+    doAnswer(this::mockitoDoTest)
+        .when(mockListener)
+        .onFileDelete(any(), any(Synchronization.class));
+
+    doAnswer(this::mockitoDoTest)
+        .when(mockListener)
+        .onDirectoryCreate(any(), any(Synchronization.class));
+
+    doAnswer(this::mockitoDoTest)
+        .when(mockListener)
+        .onDirectoryChange(any(), any(Synchronization.class));
+
+    doAnswer(this::mockitoDoTest)
+        .when(mockListener)
+        .onDirectoryDelete(any(), any(Synchronization.class));
+
+    timesToFail.set(0);
+    failures = 0;
+  }
+
+  private Object mockitoDoTest(InvocationOnMock e) {
+    Object[] args = e.getArguments();
+    doTestWrapper.accept(() -> doTest((Synchronization) args[1]));
+    return null;
   }
 
   @Test(expected = IllegalArgumentException.class)
@@ -116,7 +182,7 @@ public class DavAlterationObserverTest {
     doReturn(Collections.singletonList(mockChild2)).when(mockSardine).list(child2.getLocation());
 
     observer.checkAndNotify(mockSardine);
-    verify(mockListener, only()).onFileCreate(any());
+    verify(mockListener, only()).onFileCreate(any(), any());
   }
 
   @Test
@@ -134,7 +200,7 @@ public class DavAlterationObserverTest {
     doReturn(Collections.singletonList(mockChild4)).when(mockSardine).list(child4.getLocation());
 
     observer.checkAndNotify(mockSardine);
-    verify(mockListener, only()).onFileCreate(any());
+    verify(mockListener, only()).onFileCreate(any(), any());
   }
 
   @Test
@@ -152,22 +218,32 @@ public class DavAlterationObserverTest {
     doReturn(Collections.singletonList(mockChild0)).when(mockSardine).list(child0.getLocation());
 
     observer.checkAndNotify(mockSardine);
-    verify(mockListener, only()).onFileCreate(any());
+    verify(mockListener, only()).onFileCreate(any(), any());
   }
 
   @Test
   public void testModify() {
     doReturn("E/00006").when(mockChild1).getEtag();
     observer.checkAndNotify(mockSardine);
-    verify(mockListener, only()).onFileChange(any());
+    verify(mockListener, only()).onFileChange(any(), any());
+  }
+
+  @Test
+  public void testModifyWithFailure() {
+    timesToFail.set(1);
+    doReturn("E/00006").when(mockChild1).getEtag();
+    observer.checkAndNotify(mockSardine);
+    verify(mockListener, times(failures)).onFileChange(any(), any());
+    observer.checkAndNotify(mockSardine);
+    verify(mockListener, times(failures + 1)).onFileChange(any(), any());
   }
 
   @Test
   public void testRename() {
     doReturn("/child7").when(mockChild1).getName();
     observer.checkAndNotify(mockSardine);
-    verify(mockListener, times(1)).onFileCreate(any());
-    verify(mockListener, times(1)).onFileDelete(any());
+    verify(mockListener, times(1)).onFileCreate(any(), any());
+    verify(mockListener, times(1)).onFileDelete(any(), any());
     verifyNoMoreInteractions(mockListener);
   }
 
@@ -175,12 +251,28 @@ public class DavAlterationObserverTest {
   public void testDelete() throws IOException {
     doReturn(Arrays.asList(mockParent, mockChild3)).when(mockSardine).list(parent.getLocation());
     observer.checkAndNotify(mockSardine);
-    verify(mockListener, only()).onFileDelete(any());
+    verify(mockListener, only()).onFileDelete(any(), any());
+    verifyNoMoreInteractions(mockListener);
 
+    //  If there is an error hitting Sardine, then we assume the network went down and do nothing.
     doThrow(new IOException()).when(mockSardine).list(parent.getLocation());
     observer.checkAndNotify(mockSardine);
-    verify(mockListener, times(2)).onFileDelete(any());
+  }
+
+  @Test
+  public void testDeleteWithFailure() throws IOException {
+    timesToFail.set(1);
+    doReturn(Arrays.asList(mockParent, mockChild3)).when(mockSardine).list(parent.getLocation());
+    observer.checkAndNotify(mockSardine);
+    verify(mockListener, only()).onFileDelete(any(), any());
+    observer.checkAndNotify(mockSardine);
+    verify(mockListener, times(failures + 1)).onFileDelete(any(), any());
+
     verifyNoMoreInteractions(mockListener);
+
+    //  If there is an error hitting Sardine, then we assume the network went down and do nothing.
+    doThrow(new IOException()).when(mockSardine).list(parent.getLocation());
+    observer.checkAndNotify(mockSardine);
   }
 
   @Test
@@ -197,16 +289,16 @@ public class DavAlterationObserverTest {
         .when(mockSardine)
         .list(parent.getLocation());
     observer.checkAndNotify(mockSardine);
-    verify(mockListener, times(1)).onDirectoryCreate(any());
+    verify(mockListener, times(1)).onDirectoryCreate(any(), any());
 
     doReturn("E/0009").when(mockDir).getEtag();
     observer.checkAndNotify(mockSardine);
-    verify(mockListener, times(1)).onDirectoryChange(any());
+    verify(mockListener, times(1)).onDirectoryChange(any(), any());
 
     doReturn(Arrays.asList(mockParent, mockChild1, mockChild3))
         .when(mockSardine)
         .list(parent.getLocation());
     observer.checkAndNotify(mockSardine);
-    verify(mockListener, times(1)).onDirectoryDelete(any());
+    verify(mockListener, times(1)).onDirectoryDelete(any(), any());
   }
 }

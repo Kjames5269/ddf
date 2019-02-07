@@ -13,18 +13,16 @@
  */
 package org.codice.ddf.catalog.content.monitor;
 
-import org.apache.camel.spi.Synchronization;
+public interface AsyncEntry<T> {
+  /* void commit();
 
-public interface EntryAlterationListener {
-  void onDirectoryCreate(DavEntry entry, Synchronization callback);
+  Optional<T> getParent();
 
-  void onFileCreate(DavEntry entry, Synchronization callback);
+  void addChild(T child);
 
-  void onDirectoryChange(DavEntry entry, Synchronization callback);
+  void removeChild(T child); */
 
-  void onFileChange(DavEntry entry, Synchronization callback);
+  String getName();
 
-  void onDirectoryDelete(DavEntry entry, Synchronization callback);
-
-  void onFileDelete(DavEntry entry, Synchronization callback);
+  boolean checkNetwork();
 }

@@ -151,7 +151,7 @@ public class AsyncFileAlterationObserver {
       LOGGER.trace("Sending create Request for {}", entry.getName());
 
       listener.onFileCreate(
-          entry.getFile(), new CompletionSynchronization(entry, this::commitCreate));
+          entry.getFile(), new CompletionSynchronization<>(entry, this::commitCreate));
     } else {
       // Directories are always committed and added to the parent IF they
       // don't already exist
@@ -201,7 +201,7 @@ public class AsyncFileAlterationObserver {
         }
         LOGGER.trace("Sending Match Request for {}...", entry.getName());
         listener.onFileChange(
-            entry.getFile(), new CompletionSynchronization(entry, this::commitMatch));
+            entry.getFile(), new CompletionSynchronization<>(entry, this::commitMatch));
       } else {
         entry.commit();
       }
@@ -240,7 +240,7 @@ public class AsyncFileAlterationObserver {
     if (!entry.getFile().isDirectory() && !entry.isDirectory()) {
       LOGGER.trace("Sending Delete Request for {}...", entry.getName());
       listener.onFileDelete(
-          entry.getFile(), new CompletionSynchronization(entry, this::commitDelete));
+          entry.getFile(), new CompletionSynchronization<>(entry, this::commitDelete));
     }
     //  Once there are no more children we can delete directories.
     else if (entry.getChildren().isEmpty()) {
@@ -261,7 +261,7 @@ public class AsyncFileAlterationObserver {
     LOGGER.debug("commitDelete({},{}): Starting...", entry.getName(), success);
     if (success) {
       entry.getParent().ifPresent(e -> e.removeChild(entry));
-      entry.destroy();
+      entry.commit();
     }
     removeFromProcessors(entry);
   }

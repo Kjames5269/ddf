@@ -25,6 +25,7 @@ import org.apache.camel.Processor;
 import org.apache.camel.component.file.GenericFileEndpoint;
 import org.apache.camel.component.file.GenericFileOperations;
 import org.apache.camel.component.file.GenericFileProcessStrategy;
+import org.apache.camel.spi.Synchronization;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
@@ -104,12 +105,12 @@ public class DurableWebDavFileConsumer extends AbstractDurableFileConsumer {
 
   private class EntryAlterationListenerImpl implements EntryAlterationListener {
     @Override
-    public void onDirectoryCreate(DavEntry entry) {
+    public void onDirectoryCreate(DavEntry entry, Synchronization callback) {
       // noop
     }
 
     @Override
-    public void onFileCreate(DavEntry entry) {
+    public void onFileCreate(DavEntry entry, Synchronization callback) {
       final File davFile = getDavFile(entry);
 
       Exchange exchange =
@@ -127,12 +128,12 @@ public class DurableWebDavFileConsumer extends AbstractDurableFileConsumer {
     }
 
     @Override
-    public void onDirectoryChange(DavEntry entry) {
+    public void onDirectoryChange(DavEntry entry, Synchronization callback) {
       // noop
     }
 
     @Override
-    public void onFileChange(DavEntry entry) {
+    public void onFileChange(DavEntry entry, Synchronization callback) {
       String referenceKey = entry.getLocation();
       String metacardId =
           getMetacardIdFromReference(referenceKey, "UPDATE", productToMetacardIdMap);
@@ -158,7 +159,7 @@ public class DurableWebDavFileConsumer extends AbstractDurableFileConsumer {
     }
 
     @Override
-    public void onDirectoryDelete(DavEntry entry) {
+    public void onDirectoryDelete(DavEntry entry, Synchronization callback) {
       // noop
     }
 
@@ -169,7 +170,7 @@ public class DurableWebDavFileConsumer extends AbstractDurableFileConsumer {
      * @param entry dav resource entry to process
      */
     @Override
-    public void onFileDelete(DavEntry entry) {
+    public void onFileDelete(DavEntry entry, Synchronization callback) {
       String referenceKey = entry.getLocation();
       String metacardId =
           getMetacardIdFromReference(referenceKey, "DELETE", productToMetacardIdMap);
