@@ -52,6 +52,11 @@ public class DavAlterationObserver implements Serializable {
     this.rootEntry = rootEntry;
   }
 
+  //  Only for GSON serialization
+  private DavAlterationObserver() {
+    this.rootEntry = null;
+  }
+
   /**
    * Return the directory being observed.
    *
@@ -366,6 +371,9 @@ public class DavAlterationObserver implements Serializable {
   }
 
   public void onLoad() {
+    if (rootEntry == null) {
+      throw new IllegalArgumentException("Root entry is missing");
+    }
     rootEntry.initialize();
   }
 }

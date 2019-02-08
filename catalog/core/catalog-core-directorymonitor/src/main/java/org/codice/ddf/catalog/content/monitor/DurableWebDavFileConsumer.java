@@ -26,7 +26,6 @@ import org.apache.camel.component.file.GenericFileEndpoint;
 import org.apache.camel.component.file.GenericFileOperations;
 import org.apache.camel.component.file.GenericFileProcessStrategy;
 import org.apache.camel.spi.Synchronization;
-import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
 import org.codice.ddf.catalog.content.monitor.synchronizations.DeletionSynchronization;
@@ -86,45 +85,20 @@ public class DurableWebDavFileConsumer extends AbstractDurableFileConsumer {
     if (fileSystemPersistenceProvider == null) {
       fileSystemPersistenceProvider = new FileSystemPersistenceProvider(getClass().getSimpleName());
     }
+    if (jsonSerializer == null) {
+      jsonSerializer = new JsonPersistantStore(getClass().getSimpleName());
+    }
+
     if (observer == null && fileName != null) {
 
       observer = (DavAlterationObserver) jsonSerializer.load(fileName, DavAlterationObserver.class);
 
       if (observer != null) {
         observer.onLoad();
-      } else if (isOldVersion(fileName)) {
-        observer = backwardsCompatibility(fileName);
       } else {
         observer = new DavAlterationObserver(new DavEntry(fileName));
       }
     }
-  }
-
-  private boolean isOldVersion(String fileName) {
-    String sha1 = DigestUtils.sha1Hex(fileName);
-    return fileSystemPersistenceProvider.loadAllKeys().contains(sha1);
-  }
-
-  private DavAlterationObserver backwardsCompatibility(String fileName) {
-
-    String sha1 = DigestUtils.sha1Hex(fileName);
-    DavAlterationObserver newObserver = new DavAlterationObserver(new DavEntry(fileName));
-
-    //  Will this even work since this needs to be the 'old' version???
-    DavAlterationObserver oldObserver =
-        (DavAlterationObserver) fileSystemPersistenceProvider.loadFromPersistence(sha1);
-
-    boolean success = newObserver.initialize(sardine);
-    if (!success) {
-      //  There was an IO error setting up the initial state of the observer
-      LOGGER.info("Error initializing the new state of the CDM. retrying on next poll");
-      return null;
-    }
-    oldObserver.addListener(listener);
-    oldObserver.checkAndNotify(sardine);
-    oldObserver.removeListener(listener);
-
-    return newObserver;
   }
 
   @Override
