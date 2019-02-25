@@ -86,7 +86,7 @@ public class OperationsMetacardSupport {
     return metacard;
   }
 
-  void generateMetacardAndContentItems(
+  void generateMetacardAndContentItems( //  TODO:  N E W   A P I ?
       List<ContentItem> incomingContentItems,
       Map<String, Metacard> metacardMap,
       List<ContentItem> contentItems,
@@ -151,9 +151,13 @@ public class OperationsMetacardSupport {
         boolean qualifiedContent = StringUtils.isNotEmpty(contentItem.getQualifier());
         if (qualifiedContent) {
           metacard = contentItem.getMetacard();
+          //  TODO: New API Discovered the metacard is NOT guaranteed if qualified
+          //  content is false.
+          //  However, why we're not using it, I couldn't say.
         } else {
           metacard =
-              metacardFactory.generateMetacard(mimeTypeRaw, contentItem.getId(), fileName, tmpPath);
+              metacardFactory.generateMetacard(
+                  mimeTypeRaw, contentItem.getId(), fileName, tmpPath); //  TODO:  N E W   A P I ?
         }
         metacardMap.put(metacard.getId(), metacard);
 

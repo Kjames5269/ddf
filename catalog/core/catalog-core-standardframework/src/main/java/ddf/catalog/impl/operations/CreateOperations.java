@@ -138,29 +138,30 @@ public class CreateOperations {
             streamCreateRequest, streamCreateRequest::getContentItems);
 
     // Operation populates the metacardMap, contentItems, and tmpContentPaths
-    opsMetacardSupport.generateMetacardAndContentItems(
-        streamCreateRequest.getContentItems(), metacardMap, contentItems, tmpContentPaths);
+    opsMetacardSupport
+        .generateMetacardAndContentItems( // TODO:  New Api, content Items has the new metacard info
+            //  Filename validation is done here.
+            streamCreateRequest.getContentItems(), metacardMap, contentItems, tmpContentPaths);
 
+    //  This can be modified to take in ContentTypes, or in this case contentItems.
     if (blockCreateMetacards(metacardMap.values(), fanoutTagBlacklist)) {
       String message =
           "Fanout proxy does not support create operations with blacklisted metacard tag";
       LOGGER.debug("{}. Tags blacklist: {}", message, fanoutTagBlacklist);
       throw new IngestException(message);
     }
-
+    //  Can we not?
     streamCreateRequest.getProperties().put(CONTENT_PATHS, tmpContentPaths);
-
     injectAttributes(metacardMap);
     setDefaultValues(metacardMap);
-    streamCreateRequest = applyAttributeOverrides(streamCreateRequest, metacardMap);
 
+    streamCreateRequest = applyAttributeOverrides(streamCreateRequest, metacardMap);
     try {
       if (!contentItems.isEmpty()) {
         createStorageRequest =
             new CreateStorageRequestImpl(
                 contentItems, streamCreateRequest.getId(), streamCreateRequest.getProperties());
         createStorageRequest = processPreCreateStoragePlugins(createStorageRequest);
-
         try {
           createStorageResponse = sourceOperations.getStorage().create(createStorageRequest);
           createStorageResponse.getProperties().put(CONTENT_PATHS, tmpContentPaths);
@@ -212,7 +213,7 @@ public class CreateOperations {
   //
   // Private helper methods
   //
-  private CreateResponse doCreate(CreateRequest createRequest)
+  private CreateResponse doCreate(CreateRequest createRequest) //  TODO: NEW API
       throws IngestException, SourceUnavailableException {
     CreateResponse createResponse = null;
 
@@ -279,7 +280,7 @@ public class CreateOperations {
     return createResponse;
   }
 
-  private CreateResponse doPostIngest(CreateResponse currentCreateResponse) {
+  private CreateResponse doPostIngest(CreateResponse currentCreateResponse) { //  TODO: NEW API
     CreateResponse createResponse = currentCreateResponse;
     try {
       createResponse = processPostIngestPlugins(currentCreateResponse);

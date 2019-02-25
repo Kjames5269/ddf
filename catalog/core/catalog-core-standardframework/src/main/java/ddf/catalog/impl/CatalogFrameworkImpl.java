@@ -226,7 +226,7 @@ public class CatalogFrameworkImpl extends DescribableImpl implements CatalogFram
   }
 
   @Override
-  public CreateResponse create(CreateStorageRequest createRequest)
+  public CreateResponse create(CreateStorageRequest createRequest) //  TODO: New Api
       throws IngestException, SourceUnavailableException {
     List<String> blacklist = Collections.emptyList();
 
@@ -234,7 +234,7 @@ public class CatalogFrameworkImpl extends DescribableImpl implements CatalogFram
       blacklist = new ArrayList<>(fanoutTagBlacklist);
     }
 
-    return createOperations.create(createRequest, blacklist);
+    return createOperations.create(createRequest, blacklist); //  TODO:  N E W   A P I ?
   }
 
   @Override

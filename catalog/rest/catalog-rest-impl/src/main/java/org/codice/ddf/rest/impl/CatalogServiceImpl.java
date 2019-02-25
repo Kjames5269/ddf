@@ -696,7 +696,7 @@ public class CatalogServiceImpl implements CatalogService {
   }
 
   @Override
-  public String addDocument(
+  public String addDocument( //  TODO: New api
       List<String> contentTypeList,
       HttpServletRequest httpServletRequest,
       String transformerParam,
@@ -727,7 +727,7 @@ public class CatalogServiceImpl implements CatalogService {
     return addDocument(attachmentInfoAndMetacard, contentTypeList, transformerParam, message);
   }
 
-  private String addDocument(
+  private String addDocument( //  TODO: new Api
       Map.Entry<AttachmentInfo, Metacard> attachmentInfoAndMetacard,
       List<String> contentTypeList,
       String transformerParam,
@@ -855,7 +855,7 @@ public class CatalogServiceImpl implements CatalogService {
       throw new IllegalArgumentException("No parse.resource specified in request.");
     }
     if (metacard == null) {
-      metacard = new MetacardImpl();
+      metacard = new MetacardImpl(); //  Hmmmmmmmmmmmmmmmmmmmmm
     }
 
     Set<AttributeDescriptor> missingDescriptors = new HashSet<>();
@@ -877,7 +877,7 @@ public class CatalogServiceImpl implements CatalogService {
   }
 
   @Override
-  public Map.Entry<AttachmentInfo, Metacard> parseParts(
+  public Map.Entry<AttachmentInfo, Metacard> parseParts( //  TODO: New API Prep-work
       Collection<Part> contentParts, String transformerParam) {
     if (contentParts.size() == 1) {
       Part part = Iterables.get(contentParts, 0);

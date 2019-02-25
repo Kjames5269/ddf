@@ -98,7 +98,8 @@ public class FileSystemStorageProvider implements StorageProvider {
   }
 
   @Override
-  public CreateStorageResponse create(CreateStorageRequest createRequest) throws StorageException {
+  public CreateStorageResponse create(CreateStorageRequest createRequest)
+      throws StorageException { //  TODO: New api?
     LOGGER.trace("ENTERING: create");
 
     List<ContentItem> contentItems = createRequest.getContentItems();

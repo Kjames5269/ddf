@@ -84,7 +84,7 @@ public class OperationsStorageSupport {
     return storageRequest;
   }
 
-  public void commitAndCleanup(
+  public void commitAndCleanup( //  TODO: New API
       StorageRequest storageRequest, Map<String, Map<String, Path>> tmpContentPaths) {
     if (storageRequest != null) {
       try {
