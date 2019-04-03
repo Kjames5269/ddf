@@ -106,8 +106,13 @@ public class AsyncFileAlterationObserver {
     serializer.store(rootFile.getName(), rootFile);
   }
 
+  private boolean isDestroyed = false;
+
   public void destroy() {
-    rootFile.destroy();
+    synchronized (processingLock) {
+      serializer.store(rootFile.getName(), rootFile);
+      isDestroyed = true;
+    }
   }
 
   public void setListener(final AsyncFileAlterationListener listener) {
@@ -137,6 +142,10 @@ public class AsyncFileAlterationObserver {
         return false;
       } else if (isProcessing) {
         LOGGER.debug("Another thread is currently running, returning until next poll");
+        return false;
+      } else if (isDestroyed) {
+        LOGGER.debug(
+            "the observer has been destroyed. No processing will be done within checkAndNotify");
         return false;
       }
 
@@ -207,13 +216,19 @@ public class AsyncFileAlterationObserver {
    * @param success Boolean that shows if the task failed or completed successfully
    */
   private void commitCreate(AsyncFileEntry entry, boolean success) {
-
-    LOGGER.debug("commitCreate({},{}): Starting...", entry.getName(), success);
-    if (success) {
-      entry.commit();
-      entry.getParent().ifPresent(e -> e.addChild(entry));
+    synchronized (processingLock) {
+      LOGGER.debug("commitCreate({},{}): Starting...", entry.getName(), success);
+      if (isDestroyed) {
+        LOGGER.debug(
+            "the observer has been destroyed, no processing will be done for commitCreate");
+        return;
+      }
+      if (success) {
+        entry.commit();
+        entry.getParent().ifPresent(e -> e.addChild(entry));
+      }
+      onFinish();
     }
-    onFinish();
   }
 
   /**
@@ -246,11 +261,17 @@ public class AsyncFileAlterationObserver {
    * @param success Boolean that shows if the task failed or completed successfully
    */
   private void commitMatch(AsyncFileEntry entry, boolean success) {
-    LOGGER.debug("commitMatch({},{}): Starting...", entry.getName(), success);
-    if (success) {
-      entry.commit();
+    synchronized (processingLock) {
+      LOGGER.debug("commitMatch({},{}): Starting...", entry.getName(), success);
+      if (isDestroyed) {
+        LOGGER.debug("the observer has been destroyed, no processing will be done for commitMatch");
+        return;
+      }
+      if (success) {
+        entry.commit();
+      }
+      onFinish();
     }
-    onFinish();
   }
 
   /**
@@ -283,12 +304,19 @@ public class AsyncFileAlterationObserver {
    * @param success Boolean that shows if the task failed or completed successfully
    */
   private void commitDelete(AsyncFileEntry entry, boolean success) {
-    LOGGER.debug("commitDelete({},{}): Starting...", entry.getName(), success);
-    if (success) {
-      entry.getParent().ifPresent(e -> e.removeChild(entry));
-      entry.destroy();
+    synchronized (processingLock) {
+      LOGGER.debug("commitDelete({},{}): Starting...", entry.getName(), success);
+      if (isDestroyed) {
+        LOGGER.debug(
+            "the observer has been destroyed, no processing will be done for commitDelete");
+        return;
+      }
+      if (success) {
+        entry.getParent().ifPresent(e -> e.removeChild(entry));
+        entry.destroy();
+      }
+      onFinish();
     }
-    onFinish();
   }
 
   /**
@@ -368,11 +396,9 @@ public class AsyncFileAlterationObserver {
   }
 
   private void onFinish() {
-    synchronized (processingLock) {
-      if (processing.decrementAndGet() == 0) {
-        serializer.store(rootFile.getName(), rootFile);
-        isProcessing = false;
-      }
+    if (processing.decrementAndGet() == 0) {
+      serializer.store(rootFile.getName(), rootFile);
+      isProcessing = false;
     }
   }
 }

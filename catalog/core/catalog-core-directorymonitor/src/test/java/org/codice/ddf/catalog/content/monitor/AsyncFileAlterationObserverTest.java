@@ -682,9 +682,21 @@ public class AsyncFileAlterationObserverTest {
   @Test
   public void testNestedDirectoryCreateAndDestroy() throws Exception {
     //  Create the observer after the nested directory. Nothing should be added.
-    initNestedDirectory(5, 3, 4, 2);
+
+    initFiles(3, monitoredDirectory, "PreSerial");
+    observer.checkAndNotify();
     init();
+
     observer.destroy();
+
+    initNestedDirectory(5, 3, 4, 2);
+
+    observer.checkAndNotify();
+    verify(fileListener, times(0)).onFileCreate(any(), any());
+
+    observer = AsyncFileAlterationObserver.load(monitoredDirectory, store);
+    observer.setListener(fileListener);
+
     observer.checkAndNotify();
     verify(fileListener, times(totalSize)).onFileCreate(any(), any());
   }
