@@ -164,6 +164,7 @@ const Polygon = props => {
 
 const BoundingBox = props => {
   const { dd, setState } = props
+  console.log('lat-long-dd.fuck')
   return (
     <div>
       <DdLatitude

@@ -61,6 +61,8 @@ function ddToWkt(dd) {
     return null
   }
 
+  console.log('ddToWkt(): starting...')
+
   let wkt = null
   const points = []
   switch (dd.shape) {
@@ -144,6 +146,8 @@ function validateDdPoint(point) {
 }
 
 function validateDdBoundingBox(boundingbox) {
+  console.log('validateDdBoundingBox(): starting')
+
   const north = parseDdCoordinate(boundingbox.north)
   const south = parseDdCoordinate(boundingbox.south)
   const east = parseDdCoordinate(boundingbox.east)
@@ -174,9 +178,12 @@ function validateDdBoundingBox(boundingbox) {
 }
 
 function validateDd(dd) {
+  console.log('validateDd(): starting')
   if (inputIsBlank(dd)) {
     return { valid: true, error: null }
   }
+
+  console.log('validateDd(): not Blank')
 
   let valid = true
   let error = null
@@ -226,9 +233,11 @@ function validateDd(dd) {
         !validateDdLongitude(dd.boundingbox.east) ||
         !validateDdLongitude(dd.boundingbox.west)
       ) {
+        console.log(`validateDd(): ${errorMessages.invalidCoordinates}`)
         valid = false
         error = errorMessages.invalidCoordinates
       } else if (!validateDdBoundingBox(dd.boundingbox)) {
+        console.log(`validateDd(): ${errorMessages.invalidBoundingBoxDd}`)
         valid = false
         error = errorMessages.invalidBoundingBoxDd
       }

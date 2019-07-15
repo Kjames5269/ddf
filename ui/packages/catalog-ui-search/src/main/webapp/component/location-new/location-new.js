@@ -51,19 +51,24 @@ module.exports = Backbone.AssociatedModel.extend({
   },
 
   /*
-     * Return the active input converted to WKT. If the input failed validation, return "INVALID".
-     * If the input is blank, return null.
-     */
+   * Return the active input converted to WKT. If the input failed validation, return "INVALID".
+   * If the input is blank, return null.
+   */
   getValue() {
+    console.log('location-new: 2')
+
     if (!this.isValid()) {
       return 'INVALID'
     }
+
+    console.log('location-new: 3')
 
     const mode = this.get('mode')
     switch (mode) {
       case 'wkt':
         return this.get(mode)
       case 'dd':
+        console.log('location-new: 4')
         return ddToWkt(this.get(mode))
       case 'dms':
         return dmsToWkt(this.get(mode))
@@ -76,6 +81,7 @@ module.exports = Backbone.AssociatedModel.extend({
 
   /* Run the appropriate validator for the active mode. Blank input is considered valid */
   validate() {
+    console.log('location-new: 1')
     const mode = this.get('mode')
     let validationReport
     switch (mode) {

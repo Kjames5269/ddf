@@ -24,9 +24,11 @@ const withAdapter = Component =>
       this.setState(this.props.model.toJSON())
     }
     componentWillMount() {
+      console.log('CWM')
       this.props.model.on('change', this.setModelState, this)
     }
     componentWillUnmount() {
+      console.log('CWU')
       this.props.model.off('change', this.setModelState)
     }
     render() {

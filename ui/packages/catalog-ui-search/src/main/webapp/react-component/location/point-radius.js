@@ -26,28 +26,41 @@ const {
 const DirectionInput = require('../../component/location-new/geo-components/direction.js')
 const { Direction } = require('../../component/location-new/utils/dms-utils.js')
 
+const NumberInput = ({ value, label, onChange, addon, callback }) => {
+  return (
+    <TextField
+      type="number"
+      label={label}
+      value={value}
+      onChange={value => {
+        const number = parseFloat(value)
+        onChange(isNaN(number) ? 0 : number)
+      }}
+      onBlur={callback}
+      addon={addon}
+    />
+  )
+}
+
 const PointRadiusLatLon = props => {
   const { lat, lon, radius, radiusUnits, cursor } = props
   return (
     <div>
-      <TextField
-        type="number"
+      <NumberInput
         label="Latitude"
-        value={lat === 0 ? '' : lat}
+        value={lat}
         onChange={cursor('lat')}
         onBlur={props.callback}
         addon="°"
       />
-      <TextField
-        type="number"
+      <NumberInput
         label="Longitude"
-        value={lon === 0 ? '' : lon}
+        value={lon}
         onChange={cursor('lon')}
         addon="°"
       />
       <Units value={radiusUnits} onChange={cursor('radiusUnits')}>
-        <TextField
-          type="number"
+        <NumberInput
           min="0"
           label="Radius"
           value={radius}
@@ -64,7 +77,11 @@ const PointRadiusUsngMgrs = props => {
     <div>
       <TextField label="USNG / MGRS" value={usng} onChange={cursor('usng')} />
       <Units value={radiusUnits} onChange={cursor('radiusUnits')}>
-        <TextField label="Radius" value={radius} onChange={cursor('radius')} />
+        <NumberInput
+          label="Radius"
+          value={radius}
+          onChange={cursor('radius')}
+        />
       </Units>
     </div>
   )
@@ -82,13 +99,13 @@ const PointRadiusUtmUps = props => {
   } = props
   return (
     <div>
-      <TextField
+      <NumberInput
         label="Easting"
         value={utmUpsEasting}
         onChange={cursor('utmUpsEasting')}
         addon="m"
       />
-      <TextField
+      <NumberInput
         label="Northing"
         value={utmUpsNorthing}
         onChange={cursor('utmUpsNorthing')}
@@ -100,7 +117,11 @@ const PointRadiusUtmUps = props => {
         onChange={cursor('utmUpsHemisphere')}
       />
       <Units value={radiusUnits} onChange={cursor('radiusUnits')}>
-        <TextField label="Radius" value={radius} onChange={cursor('radius')} />
+        <NumberInput
+          label="Radius"
+          value={radius}
+          onChange={cursor('radius')}
+        />
       </Units>
     </div>
   )
@@ -140,9 +161,8 @@ const PointRadiusDms = props => {
         />
       </DmsLongitude>
       <Units value={radiusUnits} onChange={cursor('radiusUnits')}>
-        <TextField
+        <NumberInput
           label="Radius"
-          type="number"
           value={radius}
           onChange={cursor('radius')}
         />
