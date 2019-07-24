@@ -35,6 +35,7 @@ const {
   getBboxDmsFromMap,
   getRadiusDmsFromMap,
   handleLocationType,
+  getLatLon,
 } = require('./location-newer.js')
 
 const Direction = dmsUtils.Direction
@@ -270,5 +271,10 @@ module.exports = Backbone.AssociatedModel.extend({
 
   handleLocationType() {
     this.update(handleLocationType)
+  },
+
+  setLatLon() {
+    console.error('setLatLon(): starting')
+    this.update(getLatLon)
   },
 })
