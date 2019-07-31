@@ -20,6 +20,7 @@ const store = require('../../js/store.js')
 const Common = require('../../js/Common.js')
 const dmsUtils = require('../location-new/utils/dms-utils.js')
 const {
+  convert,
   convertToValid,
   repositionLatLon,
   getBboxLatLon,
@@ -198,8 +199,12 @@ module.exports = Backbone.AssociatedModel.extend({
     store.get('content').turnOnDrawing(this)
   },
 
-  update(fn, ...args) {
-    const value = fn(...args, this.toJSON())
+  update(fn) {
+    console.log('Update starting(): ')
+    console.log(this.toJSON())
+    console.log('Update(): --- ')
+
+    const value = fn(this.toJSON(), this.drawing)
     this.set(value, { silent: true })
   },
 
@@ -208,61 +213,61 @@ module.exports = Backbone.AssociatedModel.extend({
   },
 
   setBboxLatLon() {
-    this.update(getBboxLatLon)
+    this.update(convert)
   },
 
   setRadiusLatLon() {
-    this.update(getRadiusLatLon)
+    this.update(convert)
   },
 
   setRadiusDmsLat() {
-    this.update(setRadiusDmsLat, 'dmsLat', 'dmsLatDirection', 'lat')
+    this.update(convert)
   },
 
   setRadiusDmsLon() {
-    this.update(setRadiusDmsLon, 'dmsLon', 'dmsLonDirection', 'lon')
+    this.update(convert)
   },
 
   setBboxUsng() {
-    this.update(getBboxUsng)
+    this.update(convert)
   },
 
   setBBox() {
-    this.update(getBBox)
+    this.update(convert)
   },
 
   setRadiusUsng() {
-    this.update(getRadiusUsng)
+    this.update(convert)
   },
 
   // This method is called when the UTM/UPS point radius coordinates are changed by the user.
   setRadiusUtmUps() {
-    this.update(getRadiusUtmUps)
+    this.update(convert)
   },
 
   // This method is called when the UTM/UPS bounding box coordinates are changed by the user.
   setBboxUtmUps() {
-    this.update(getBboxUtmUps)
+    this.update(convert)
   },
 
   setBboxDmsNorth() {
-    this.update(setLatLonFromDms, 'dmsNorth', 'dmsNorthDirection', 'north')
+    this.update(convert)
   },
 
   setBboxDmsSouth() {
-    this.update(setLatLonFromDms, 'dmsSouth', 'dmsSouthDirection', 'south')
+    this.update(convert)
   },
 
   setBboxDmsEast() {
-    this.update(setLatLonFromDms, 'dmsEast', 'dmsEastDirection', 'east')
+    this.update(convert)
   },
 
   setBboxDmsWest() {
-    this.update(setLatLonFromDms, 'dmsWest', 'dmsWestDirection', 'west')
+    this.update(convert)
   },
 
   setBboxDmsFromMap() {
-    this.update(getBboxDmsFromMap)
+    this.update(convert)
   },
 
   setRadiusDmsFromMap() {

@@ -76,31 +76,40 @@ const convertToValid = (key, model) => {
   }
 }
 
-const dispatch = {
-  line: {},
-  poly: {},
-  circle: {
-    latlon: undefined,
-    dms: undefined,
-    usng: undefined,
-    utmUps: undefined,
-  },
-  bbox: {
-    latlon: getBboxLatLon,
-    dms: undefined,
-    usng: getBboxUsng,
-    utmUps: getBboxUtmUps,
-  },
-  keyword: {},
+const convertBboxLLtoMap = (north, south, west, east) => {
+  return {
+    mapNorth: north,
+    mapSouth: south,
+    mapWest: west,
+    mapEast: east,
+  }
 }
 
-const convert = args => {
-  const mode = dispatch[args.mode]
-  const location = mode[args.locationType]
+const setLatLonFromDms = (
+  dmsCoordinateKey,
+  dmsDirectionKey,
+  latLonKey,
+  args
+) => {
+  const coord = {}
+  coord.coordinate = args[dmsCoordinateKey]
 
-  if (typeof location === 'function') {
-    location(args)
+  const isDmsInputIncomplete =
+    coord.coordinate && coord.coordinate.includes('_')
+  if (isDmsInputIncomplete) {
+    return
   }
+
+  coord.direction = args[dmsDirectionKey]
+
+  const dmsCoordinate = dmsUtils.parseDmsCoordinate(coord)
+  let result = {}
+  if (dmsCoordinate) {
+    result[latLonKey] = dmsUtils.dmsCoordinateToDD(dmsCoordinate)
+  } else {
+    result[latLonKey] = undefined
+  }
+  return result
 }
 
 // Return true if the current location type is UTM/UPS, otherwise false.
@@ -133,10 +142,7 @@ const getBBox = args => {
   if (locationType !== usngLocationType && !isLocationTypeUtmUps(args)) {
     result = {
       ...result,
-      mapNorth: north,
-      mapSouth: south,
-      mapEast: east,
-      mapWest: west,
+      ...convertBboxLLtoMap(north, south, west, east),
     }
   }
   return {
@@ -189,37 +195,6 @@ const getBBox = args => {
 //   }
 // }
 
-const setLatLonFromDms = (
-  dmsCoordinateKey,
-  dmsDirectionKey,
-  latLonKey,
-  args
-) => {
-  console.log('setLatLonFromDms(): starting...')
-  console.log(args)
-  console.log(dmsCoordinateKey + ' : ' + dmsDirectionKey + ' : ' + latLonKey)
-  const coord = {}
-  coord.coordinate = args[dmsCoordinateKey]
-
-  const isDmsInputIncomplete =
-    coord.coordinate && coord.coordinate.includes('_')
-  if (isDmsInputIncomplete) {
-    return
-  }
-
-  coord.direction = args[dmsDirectionKey]
-
-  const dmsCoordinate = dmsUtils.parseDmsCoordinate(coord)
-  let result = {}
-  if (dmsCoordinate) {
-    result[latLonKey] = dmsUtils.dmsCoordinateToDD(dmsCoordinate)
-  } else {
-    result[latLonKey] = undefined
-  }
-  console.log(result)
-  return result
-}
-
 const setRadiusDmsLat = (dmsLat, dmsLatDirection, latLonKey, args) => {
   console.log('location-old:setRadiusDmsLat(): Starting')
 
@@ -239,7 +214,7 @@ const setRadiusDmsLon = (dmsLat, dmsLatDirection, latLonKey, args) => {
 const isLatLonValid = (lat, lon) => {
   lat = parseFloat(lat)
   lon = parseFloat(lon)
-  return lat > -90 && lat < 90 && lon > -180 && lon < 180
+  return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
 }
 
 // Convert Lat-Lon to UTM/UPS coordinates. Returns undefined if lat or lon is undefined or not a number.
@@ -406,49 +381,48 @@ const handleLLtoUtmUps = (lat, lon, args, fn) => {
   }
 }
 
-const getBboxLatLon = args => {
-  const { north, south, west, east, drawing, locationType } = args
-
-  if (!isLatLonValid(north, west) || !isLatLonValid(south, east)) {
-    return
+//  dmsCoordinateKey: dmsNorth, dmsSouth...
+//  dmsDirectionKey: dmsNorthDirection...
+//  directionKey: Direction.North, Direction.South,
+//  directionVal: number
+const convertLLtoDms = (
+  dmsCoordinateKey,
+  dmsDirectionKey,
+  directionKey,
+  directionVal
+) => {
+  let result = {}
+  let localDir
+  if (directionKey === Direction.North || directionKey === Direction.South) {
+    localDir = dmsUtils.ddToDmsCoordinateLat(directionVal)
+  } else if (
+    directionKey === Direction.East ||
+    directionKey === Direction.West
+  ) {
+    localDir = dmsUtils.ddToDmsCoordinateLon(directionVal)
+  } else {
+    throw new TypeError(`directionKey '${directionKey}' is not N, S, E, or W`)
   }
 
-  let result = {
-    ...handleLLtoUtmUps(north, west, args, getUtmUpsUpperLeft),
-    ...handleLLtoUtmUps(south, east, args, getUtmUpsLowerRight),
-  }
+  result[dmsCoordinateKey] = (localDir && localDir.coordinate) || ''
+  result[dmsDirectionKey] = (localDir && localDir.direction) || directionKey
+  return result
+}
 
-  if (isLocationTypeUtmUps(args) && drawing) {
-    result = {
-      ...result,
-      ...repositionLatLon(args),
-    }
-  }
-
+const convertBboxLLtoUSNG = (north, south, west, east) => {
   const lat = (north + south) / 2
   const lon = (east + west) / 2
   if (isInUpsSpace(lat, lon)) {
     return {
-      ...result,
       usngbb: undefined,
     }
   }
 
   const usngsStr = converter.LLBboxtoUSNG(north, south, east, west)
 
-  result = {
-    ...result,
+  return {
     usngbb: usngsStr,
   }
-
-  if (locationType === usngLocationType && drawing) {
-    result = {
-      ...result,
-      ...repositionLatLon(args),
-    }
-  }
-
-  return result
 }
 
 // Format the internal representation of UTM/UPS coordinates into the form expected by the model.
@@ -576,7 +550,7 @@ const getBboxDmsFromMap = args => {
   const { mapNorth, mapSouth, mapWest, mapEast } = args
   const { dmsNorth, dmsSouth, dmsWest, dmsEast } = args
 
-  const localDmsNorth = dmsUtils.ddToDmsCoordinateLat(
+  const localDmsNorth = dmsUtils.xc(
     mapNorth,
     dmsUtils.getSecondsPrecision(dmsNorth)
   )
@@ -609,7 +583,7 @@ const getBboxDmsFromMap = args => {
 }
 
 const getRadiusDmsFromMap = args => {
-  console.log('location-old:getRadiusDmsFromMap(): Starting')
+  console.error('locatioxn-old:getRadiusDmsFromMap(): Starting')
 
   const { lat, lon, dmsLat, dmsLon } = args
   const dmsLatitude = dmsUtils.ddToDmsCoordinateLat(
@@ -629,27 +603,24 @@ const getRadiusDmsFromMap = args => {
 }
 
 const handleLocationType = args => {
-  console.log('location-old:handleLocationType(): Starting')
-
-  const { locationType, mapNorth, mapSouth, mapEast, mapWest } = args
-  if (locationType === 'latlon') {
-    return {
-      north: mapNorth,
-      south: mapSouth,
-      east: mapEast,
-      west: mapWest,
-    }
-  } else if (locationType === 'dms') {
-    return {
-      ...getBboxDmsFromMap(args),
-      ...getRadiusDmsFromMap(args),
-    }
-  }
+  // console.log('location-old:handleLocationType(): Starting')
+  // const { locationType, mapNorth, mapSouth, mapEast, mapWest } = args
+  // if (locationType === 'latlon') {
+  //   return {
+  //     north: mapNorth,
+  //     south: mapSouth,
+  //     east: mapEast,
+  //     west: mapWest,
+  //   }
+  // } else if (locationType === 'dms') {
+  //   return {
+  //     ...getBboxDmsFromMap(args),
+  //     ...getRadiusDmsFromMap(args),
+  //   }
+  // }
 }
 
-const bbLLtoUtmUps = args => {
-  const { north, west, east, south } = args
-
+const convertLLBboxtoUtmUps = (north, south, west, east) => {
   let result = {}
 
   let utmUps = LLtoUtmUps(north, west)
@@ -673,38 +644,6 @@ const bbLLtoUtmUps = args => {
   return result
 }
 
-const getBboxUsng = args => {
-  console.log('location-old:getBboxUsng(): Starting')
-
-  const { locationType, usngbb } = args
-  if (locationType !== usngLocationType) {
-    return
-  }
-
-  let result
-  try {
-    result = converter.USNGtoLL(usngbb)
-  } catch (err) {}
-
-  if (result === undefined) {
-    return
-  }
-
-  let newResult = {
-    mapNorth: result.north,
-    mapSouth: result.south,
-    mapEast: result.east,
-    mapWest: result.west,
-  }
-
-  newResult = {
-    ...result,
-    ...newResult,
-    ...bbLLtoUtmUps(args),
-  }
-  return newResult
-}
-
 // Set the model fields for the Point Radius UTM/UPS. The arguments are:
 //
 //   utmUpsFormatted : output from the method 'formatUtmUps'
@@ -716,41 +655,6 @@ const getUtmUpsPointRadius = (utmUpsFormatted, silent) => {
     utmUpsZone: utmUpsFormatted.zoneNumber,
     utmUpsHemisphere: utmUpsFormatted.hemisphere,
   }
-}
-
-const getRadiusUsng = args => {
-  console.log('location-old:getRadiusUsng(): Starting')
-
-  const { usng } = args
-  if (usng === undefined) {
-    return
-  }
-
-  let result
-  try {
-    result = converter.USNGtoLL(usng, true)
-  } catch (err) {}
-
-  if (!isNaN(result.lat) && !isNaN(result.lon)) {
-    const utmUps = LLtoUtmUps(result.lat, result.lon)
-    if (utmUps !== undefined) {
-      const utmUpsParts = formatUtmUps(utmUps)
-      result = {
-        ...result,
-        ...getUtmUpsPointRadius(utmUpsParts, true),
-      }
-    }
-  } else {
-    result = {
-      ...result,
-      ...clearUtmUpsPointRadius(true),
-      usng: undefined,
-      lat: undefined,
-      lon: undefined,
-      radius: 1,
-    }
-  }
-  return result
 }
 
 const clearUtmUpsPointRadius = silent => {
@@ -794,176 +698,6 @@ const parseUtmUps = (eastingRaw, northingRaw, zoneRaw, hemisphereRaw) => {
       northing,
     }
   }
-}
-
-// This method is called when the UTM/UPS point radius coordinates are changed by the user.
-const getRadiusUtmUps = args => {
-  console.log('location-old:getRadiusUtmUps(): Starting')
-
-  if (!isLocationTypeUtmUps(args) && !isUtmUpsPointRadiusDefined(args)) {
-    return
-  }
-
-  const utmUpsParts = parseUtmUpsPointRadius(args)
-  if (utmUpsParts === undefined) {
-    return
-  }
-
-  let result = {}
-  const utmUpsResult = utmUpstoLL(utmUpsParts)
-  if (utmUpsResult === undefined) {
-    if (utmUpsParts.zoneNumber !== 0) {
-      result = {
-        ...result,
-        ...clearUtmUpsPointRadius(true),
-      }
-    }
-    result = {
-      ...result,
-      lat: undefined,
-      lon: undefined,
-      usng: undefined,
-      radius: 1,
-    }
-    return result
-  }
-
-  result = {
-    ...result,
-    ...utmUpsResult,
-  }
-
-  const { lat, lon } = utmUpsResult
-  if (!isLatLonValid(lat, lon) || isInUpsSpace(lat, lon)) {
-    return {
-      ...result,
-      usng: undefined,
-    }
-  }
-
-  const usngsStr = converter.LLtoUSNG(lat, lon, usngPrecision)
-
-  return {
-    ...result,
-    usng: usngsStr,
-  }
-  //  this.set('usng', usngsStr, { silent: true })
-}
-
-// This method is called when the UTM/UPS bounding box coordinates are changed by the user.
-const getBboxUtmUps = args => {
-  console.log('location-old:getBboxUtmUps(): Starting')
-
-  if (!isLocationTypeUtmUps(args)) {
-    return
-  }
-  let upperLeft = undefined
-  let lowerRight = undefined
-
-  let result = {}
-  if (isUtmUpsUpperLeftDefined(args)) {
-    const upperLeftParts = parseUtmUpsUpperLeft(args)
-    if (upperLeftParts !== undefined) {
-      upperLeft = utmUpstoLL(upperLeftParts)
-
-      if (upperLeft !== undefined) {
-        result = {
-          ...result,
-          mapNorth: upperLeft.lat,
-          mapWest: upperLeft.lon,
-          north: upperLeft.lat,
-          west: upperLeft.lon,
-        }
-        // this.set({ mapNorth: upperLeft.lat, mapWest: upperLeft.lon })
-        // this.set(
-        //   { north: upperLeft.lat, west: upperLeft.lon },
-        //   { silent: true }
-        // )
-      } else {
-        if (upperLeftParts.zoneNumber !== 0) {
-          result = {
-            ...result,
-            ...clearUtmUpsUpperLeft(true),
-          }
-        }
-        upperLeft = undefined
-        result = {
-          ...result,
-          mapNorth: undefined,
-          mapSouth: undefined,
-          mapEast: undefined,
-          mapWest: undefined,
-          usngbb: undefined,
-        }
-      }
-    }
-  }
-
-  if (isUtmUpsLowerRightDefined(args)) {
-    const lowerRightParts = parseUtmUpsLowerRight(args)
-    if (lowerRightParts !== undefined) {
-      lowerRight = utmUpstoLL(lowerRightParts)
-
-      if (lowerRight !== undefined) {
-        result = {
-          ...result,
-          mapSouth: lowerRight.lat,
-          mapEast: lowerRight.lon,
-          south: lowerRight.lat,
-          east: lowerRight.lon,
-        }
-        // this.set({ mapSouth: lowerRight.lat, mapEast: lowerRight.lon })
-        // this.set(
-        //   { south: lowerRight.lat, east: lowerRight.lon },
-        //   { silent: true }
-        // )
-      } else {
-        if (lowerRightParts.zoneNumber !== 0) {
-          result = {
-            ...result,
-            ...clearUtmUpsLowerRight(true),
-          }
-        }
-        lowerRight = undefined
-        result = {
-          ...result,
-          mapNorth: undefined,
-          mapSouth: undefined,
-          mapEast: undefined,
-          mapWest: undefined,
-          usngbb: undefined,
-        }
-      }
-    }
-  }
-
-  if (upperLeft === undefined || lowerRight == undefined) {
-    return result
-  }
-
-  const lat = (upperLeft.lat + lowerRight.lat) / 2
-  const lon = (upperLeft.lon + lowerRight.lon) / 2
-
-  if (!isLatLonValid(lat, lon) || isInUpsSpace(lat, lon)) {
-    return {
-      ...result,
-      usngbb: undefined,
-    }
-  }
-
-  const usngsStr = converter.LLBboxtoUSNG(
-    upperLeft.lat,
-    lowerRight.lat,
-    lowerRight.lon,
-    upperLeft.lon
-  )
-  return {
-    ...result,
-    usngbb: usngsStr,
-  }
-  // this.set('usngbb', usngsStr, {
-  //   silent: this.get('locationType') === 'usng',
-  // })
 }
 
 const notDrawing = args => {
@@ -1025,49 +759,6 @@ const setLatLonUtmUps = ({ result, isDefined, parse, assign, clear }, args) => {
     } else {
       return clear(args)
     }
-  }
-}
-
-const getRadiusLatLon = args => {
-  console.log('location-old:getRadiusLatLon(): Starting')
-
-  const { lat, lon, locationType } = args
-
-  if (
-    (!store.get('content').get('drawing') && locationType !== 'latlon') ||
-    !isLatLonValid(lat, lon)
-  ) {
-    return
-  }
-
-  let result = getRadiusDmsFromMap(args)
-
-  const utmUps = LLtoUtmUps(lat, lon)
-  if (utmUps !== undefined) {
-    const utmUpsParts = formatUtmUps(utmUps)
-    result = {
-      ...result,
-      ...getUtmUpsPointRadius(utmUpsParts, true),
-    }
-  } else {
-    result = {
-      ...result,
-      ...clearUtmUpsPointRadius(false),
-    }
-  }
-
-  if (isInUpsSpace(lat, lon)) {
-    result = {
-      ...result,
-      usng: undefined,
-    }
-    return result
-  }
-
-  const usngsStr = converter.LLtoUSNG(lat, lon, usngPrecision)
-  return {
-    ...result,
-    usng: usngsStr,
   }
 }
 
@@ -1141,7 +832,8 @@ const getLatLon = args => {
 
     result = {
       ...result,
-      ...setBboxDmsSouthsetLatLonUtmUps(
+      ...setBboxDmsSouth,
+      ...setLatLonUtmUps(
         {
           result: result,
           isDefined: isUtmUpsLowerRightDefined,
@@ -1166,7 +858,369 @@ const getLatLon = args => {
   }
 }
 
+/* * * * * * * * * * * * * * *
+ * Circle
+ */
+const getRadiusLatLon = args => {
+  console.log('location-old:getRadiusLatLon(): Starting')
+
+  const { lat, lon } = args
+
+  if (!isLatLonValid(lat, lon)) {
+    return
+  }
+
+  let utmUpsObj = {}
+
+  const utmUps = LLtoUtmUps(lat, lon)
+  if (utmUps !== undefined) {
+    const utmUpsParts = formatUtmUps(utmUps)
+    utmUpsObj = getUtmUpsPointRadius(utmUpsParts, true)
+  } else {
+    utmUpsObj = clearUtmUpsPointRadius(false)
+  }
+
+  const usngsStr = isInUpsSpace(lat, lon)
+    ? undefined
+    : converter.LLtoUSNG(lat, lon, usngPrecision)
+
+  return {
+    ...utmUpsObj,
+    ...getRadiusDmsFromMap(args),
+    usng: usngsStr,
+  }
+}
+
+const getRadiusDms = args => {
+  let latlon = {
+    ...setLatLonFromDms('dmsLon', 'dmsLonDirection', 'lon', args),
+    ...setLatLonFromDms('dmsLat', 'dmsLatDirection', 'lat', args),
+  }
+
+  //  doesn't convert to anything else
+
+  console.log('getRadiusDms(): returning...')
+  console.log(latlon)
+  return latlon
+}
+
+const getRadiusUsng = args => {
+  console.log('location-old:getRadiusUsng(): Starting')
+
+  const { usng } = args
+  if (usng === undefined) {
+    return
+  }
+
+  //  doesn't convert to dms
+
+  let latlon
+  let result
+  try {
+    latlon = converter.USNGtoLL(usng, true)
+  } catch (err) {}
+
+  if (!isNaN(latlon.lat) && !isNaN(latlon.lon)) {
+    const utmUps = LLtoUtmUps(latlon.lat, latlon.lon)
+    if (utmUps !== undefined) {
+      const utmUpsParts = formatUtmUps(utmUps)
+      result = {
+        ...latlon,
+        ...getUtmUpsPointRadius(utmUpsParts, true),
+      }
+    }
+  } else {
+    result = {
+      ...clearUtmUpsPointRadius(true),
+      usng: undefined,
+      lat: undefined,
+      lon: undefined,
+      radius: 1,
+    }
+  }
+  return result
+}
+
+// This method is called when the UTM/UPS point radius coordinates are changed by the user.
+const getRadiusUtmUps = args => {
+  console.log('location-old:getRadiusUtmUps(): Starting')
+
+  if (!isUtmUpsPointRadiusDefined(args)) {
+    return
+  }
+
+  const utmUpsParts = parseUtmUpsPointRadius(args)
+  if (utmUpsParts === undefined) {
+    return
+  }
+
+  let result = {}
+  const latlon = utmUpstoLL(utmUpsParts)
+  if (latlon === undefined) {
+    if (utmUpsParts.zoneNumber !== 0) {
+      result = {
+        ...result,
+        ...clearUtmUpsPointRadius(true),
+      }
+    }
+    result = {
+      ...result,
+      lat: undefined,
+      lon: undefined,
+      usng: undefined,
+      radius: 1,
+    }
+    return result
+  }
+
+  const { lat, lon } = latlon
+  const usngsStr =
+    !isLatLonValid(lat, lon) || isInUpsSpace(lat, lon)
+      ? undefined
+      : converter.LLtoUSNG(lat, lon, usngPrecision)
+
+  return {
+    ...latlon,
+    ...result,
+    usng: usngsStr,
+  }
+}
+
+const getRadiusDrawing = args => {
+  console.log('getRadiusDrawing(): TODO')
+}
+
+/* * * * * * * * * * * * * * *
+ * Bbox
+ */
+
+const getBboxLatLon = args => {
+  const { north, south, west, east, drawing, locationType } = args
+  console.log(
+    `getBboxLatLon(${north}, ${south}, ${west}, ${east}, ${drawing}, ${locationType}): starting...`
+  )
+
+  if (!isLatLonValid(north, west) || !isLatLonValid(south, east)) {
+    console.log('getBboxLatLon(): latLon is invalid...')
+    return
+  }
+
+  let result = {
+    ...convertLLtoDms('dmsNorth', 'dmsNorthDirection', Direction.North, north),
+    ...convertLLtoDms('dmsSouth', 'dmsSouthDirection', Direction.South, south),
+    ...convertLLtoDms('dmsEast', 'dmsEastDirection', Direction.East, east),
+    ...convertLLtoDms('dmsWest', 'dmsWestDirection', Direction.West, west),
+    ...handleLLtoUtmUps(north, west, args, getUtmUpsUpperLeft),
+    ...handleLLtoUtmUps(south, east, args, getUtmUpsLowerRight),
+    ...convertBboxLLtoUSNG(north, south, west, east),
+    ...convertBboxLLtoMap(north, south, west, east),
+  }
+
+  // if (locationType === usngLocationType && drawing) {
+  //   result = {
+  //     ...result,
+  //     ...repositionLatLon(args),
+  //   }
+  // }
+
+  console.log('getBboxLatLon(): returning:')
+  console.log(result)
+  return result
+}
+
+const getBboxDms = args => {
+  //  Convert Dms to LatLon
+  const latlon = {
+    ...setLatLonFromDms('dmsNorth', 'dmsNorthDirection', 'north', args),
+    ...setLatLonFromDms('dmsSouth', 'dmsSouthDirection', 'south', args),
+    ...setLatLonFromDms('dmsEast', 'dmsEastDirection', 'east', args),
+    ...setLatLonFromDms('dmsWest', 'dmsWestDirection', 'west', args),
+  }
+
+  const { north, south, west, east } = latlon
+
+  return {
+    ...latlon,
+    ...handleLLtoUtmUps(north, west, args, getUtmUpsUpperLeft),
+    ...handleLLtoUtmUps(south, east, args, getUtmUpsLowerRight),
+    ...convertBboxLLtoUSNG(north, south, west, east),
+    ...convertBboxLLtoMap(north, south, west, east),
+  }
+}
+
+const getBboxUsng = args => {
+  console.log('location-old:getBboxUsng(): Starting')
+
+  const { usngbb } = args
+
+  let latlon
+  try {
+    latlon = converter.USNGtoLL(usngbb)
+  } catch (err) {}
+
+  if (latlon === undefined) {
+    return
+  }
+
+  const { north, south, west, east } = latlon
+
+  return {
+    ...latlon,
+    ...convertLLBboxtoUtmUps(north, south, west, east),
+    ...convertLLtoDms('dmsNorth', 'dmsNorthDirection', Direction.North, north),
+    ...convertLLtoDms('dmsSouth', 'dmsSouthDirection', Direction.South, south),
+    ...convertLLtoDms('dmsEast', 'dmsEastDirection', Direction.East, east),
+    ...convertLLtoDms('dmsWest', 'dmsWestDirection', Direction.West, west),
+    ...convertBboxLLtoMap(north, south, west, east),
+  }
+}
+
+// This method is called when the UTM/UPS bounding box coordinates are changed by the user.
+const getBboxUtmUps = args => {
+  console.log('location-old:getBboxUtmUps(): Starting')
+
+  let upperLeft = undefined
+  let lowerRight = undefined
+
+  let latlon = {}
+  let clearedUtmUps = {}
+
+  //  convert to LatLon
+  if (isUtmUpsUpperLeftDefined(args)) {
+    const upperLeftParts = parseUtmUpsUpperLeft(args)
+    if (upperLeftParts !== undefined) {
+      upperLeft = utmUpstoLL(upperLeftParts)
+
+      if (upperLeft !== undefined) {
+        latlon = {
+          north: upperLeft.lat,
+          west: upperLeft.lon,
+        }
+      }
+      // else {
+      //   if (upperLeftParts.zoneNumber !== 0) {
+      //     clearedUtmUps = {
+      //       ...clearUtmUpsUpperLeft(true),
+      //     }
+      //   }
+      //   upperLeft = undefined
+      //   clearedUtmUps = {
+      //     ...clearedUtmUps,
+      //     mapNorth: undefined,
+      //     mapSouth: undefined,
+      //     mapEast: undefined,
+      //     mapWest: undefined,
+      //     usngbb: undefined,
+      //   }
+      // }
+    }
+  }
+
+  if (isUtmUpsLowerRightDefined(args)) {
+    const lowerRightParts = parseUtmUpsLowerRight(args)
+    if (lowerRightParts !== undefined) {
+      lowerRight = utmUpstoLL(lowerRightParts)
+
+      if (lowerRight !== undefined) {
+        latlon = {
+          ...latlon,
+          south: lowerRight.lat,
+          east: lowerRight.lon,
+        }
+      }
+      // else {
+      //   if (lowerRightParts.zoneNumber !== 0) {
+      //     clearedUtmUps = {
+      //       ...clearedUtmUps,
+      //       ...clearUtmUpsLowerRight(true),
+      //     }
+      //   }
+      //   lowerRight = undefined
+      //   clearedUtmUps = {
+      //     ...clearedUtmUps,
+      //     mapNorth: undefined,
+      //     mapSouth: undefined,
+      //     mapEast: undefined,
+      //     mapWest: undefined,
+      //     usngbb: undefined,
+      //   }
+      // }
+    }
+  }
+
+  const { north, south, west, east } = latlon
+
+  //  If we couldn't convert to LL then return
+  if (upperLeft === undefined || lowerRight == undefined) {
+    return {
+      ...latlon,
+      ...clearedUtmUps,
+    }
+  }
+
+  const lat = (upperLeft.lat + lowerRight.lat) / 2
+  const lon = (upperLeft.lon + lowerRight.lon) / 2
+
+  const usngsStr =
+    !isLatLonValid(lat, lon) || isInUpsSpace(lat, lon)
+      ? undefined
+      : converter.LLBboxtoUSNG(
+          upperLeft.lat,
+          lowerRight.lat,
+          lowerRight.lon,
+          upperLeft.lon
+        )
+  return {
+    ...latlon,
+    ...convertLLtoDms('dmsNorth', 'dmsNorthDirection', Direction.North, north),
+    ...convertLLtoDms('dmsSouth', 'dmsSouthDirection', Direction.South, south),
+    ...convertLLtoDms('dmsEast', 'dmsEastDirection', Direction.East, east),
+    ...convertLLtoDms('dmsWest', 'dmsWestDirection', Direction.West, west),
+    ...convertBboxLLtoMap(north, south, west, east),
+    usngbb: usngsStr,
+  }
+}
+
+/* * * * * * * * * * * * * * *
+ * dispatch
+ */
+
+const dispatch = {
+  line: {},
+  poly: {},
+  circle: {
+    latlon: getRadiusLatLon,
+    dms: getRadiusDms,
+    usng: getRadiusUsng,
+    utmUps: getRadiusUtmUps,
+    drawing: getRadiusDrawing,
+  },
+  bbox: {
+    latlon: getBboxLatLon,
+    dms: getBboxDms,
+    usng: getBboxUsng,
+    utmUps: getBboxUtmUps,
+    drawing: getBboxLatLon,
+  },
+  keyword: {},
+}
+
+const convert = (args, isDrawing) => {
+  const mode = dispatch[args.mode]
+  const location = mode[args.locationType]
+
+  //  If we're drawing always return what we're drawing
+  if (isDrawing) {
+    return mode.drawing(args)
+  }
+
+  if (typeof location === 'function') {
+    return location(args)
+  }
+}
+
 export {
+  convert,
   convertToValid,
   repositionLatLon,
   getBboxLatLon,

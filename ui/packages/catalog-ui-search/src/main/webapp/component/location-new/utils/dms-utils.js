@@ -369,6 +369,7 @@ function ddToDmsCoordinateLat(
   dd,
   secondsPrecision = DEFAULT_SECONDS_PRECISION
 ) {
+  console.log(`ddToDmsCoordinateLat(${dd}, ${secondsPrecision}): starting...`)
   if (!isNaN(dd)) {
     const direction = dd >= 0 ? Direction.North : Direction.South
     return ddToDmsCoordinate(
@@ -384,6 +385,7 @@ function ddToDmsCoordinateLon(
   dd,
   secondsPrecision = DEFAULT_SECONDS_PRECISION
 ) {
+  console.log(`ddToDmsCoordinateLon(${dd}): starting...`)
   if (!isNaN(dd)) {
     const direction = dd >= 0 ? Direction.East : Direction.West
     return ddToDmsCoordinate(
